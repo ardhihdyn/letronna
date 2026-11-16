@@ -33,74 +33,85 @@ impl Chat {
         } else {
             px(80.)
         };
+        // The sidebar's share of the bar, as wide as the sidebar is drawn
+        // now, even while it eases open or folds.
+        let side = self.sidebar_drawn;
+        let theme = cx.theme();
+        // No bar across the window: the sidebar's colour runs up to the top
+        // under the traffic lights and the toggle, and the chat's own header
+        // sits on the page beside it, with no line between them.
         TitleBar::new()
-            // Taller than gpui-component's, with room around what it holds,
-            // as a modern Mac app's bar; the traffic lights sit in its middle.
             .h(BAR_HEIGHT)
-            .pr_3()
+            .bg(theme.sidebar)
+            .border_b_0()
             .when(cfg!(target_os = "macos"), |bar| bar.pl(inset))
             .child(
                 h_flex()
+                    .flex_shrink_0()
+                    .w((side - inset - px(3.)).max(px(36.)))
+                    .justify_end()
+                    .pr_2()
+                    .child(no_drag(
+                        Button::new("toggle-sidebar")
+                            .plain(cx)
+                            .small()
+                            .icon(
+                                Icon::new(if self.sidebar_open {
+                                    IconName::PanelLeftClose
+                                } else {
+                                    IconName::PanelLeftOpen
+                                })
+                                .size_4()
+                                .text_color(theme.muted_foreground),
+                            )
+                            .tooltip_with_action("Toggle sidebar", &ToggleSidebar, None)
+                            .on_click(cx.listener(|this, _, _, cx| this.toggle_sidebar(cx))),
+                    )),
+            )
+            .child(
+                h_flex()
                     .flex_1()
+                    .min_w_0()
+                    .h_full()
                     .items_center()
                     .gap_2()
-                    // Nothing follows the chip on macOS, so keep it off the edge.
-                    .when(cfg!(target_os = "macos"), |bar| bar.pr_3())
-                    .child(
-                        h_flex().flex_1().items_center().gap_2().child(no_drag(
-                            Button::new("toggle-sidebar")
-                                .plain(cx)
-                                .small()
-                                .icon(
-                                    Icon::new(if self.sidebar_open {
-                                        IconName::PanelLeftClose
-                                    } else {
-                                        IconName::PanelLeftOpen
-                                    })
-                                    .size_4(),
-                                )
-                                .tooltip_with_action("Toggle sidebar", &ToggleSidebar, None)
-                                .on_click(cx.listener(|this, _, _, cx| this.toggle_sidebar(cx))),
-                        )),
-                    )
-                    // The session in the middle of the bar, its model under
-                    // it, as the phone heads a chat.
+                    .pl_5()
+                    .pr_3()
+                    .bg(theme.background)
+                    .border_l(px(3.))
+                    .border_color(theme.sidebar_border)
                     .child(self.bar_title(cx))
-                    .child(
-                        h_flex()
-                            .flex_1()
-                            .items_center()
-                            .justify_end()
-                            .gap_2()
-                            .child(no_drag(self.command_button(window, cx)))
-                            .child(no_drag(
-                                Button::new("toggle-panel")
-                                    .plain(cx)
-                                    .small()
-                                    .icon(Icon::new(IconName::PanelRight).size_4())
-                                    .tooltip_with_action(
-                                        "Toggle right panel",
-                                        &crate::ui::panel::TogglePanel,
-                                        Some("Chat"),
-                                    )
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.toggle_panel(window, cx)
-                                    })),
-                            ))
-                            .children(self.profile_label.clone().map(|name| {
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(name)
-                            }))
-                            .child(no_drag(self.account_chip(cx))),
-                    ),
+                    .child(no_drag(self.command_button(window, cx)))
+                    .child(no_drag(
+                        Button::new("toggle-panel")
+                            .plain(cx)
+                            .small()
+                            .icon(
+                                Icon::new(IconName::PanelRight)
+                                    .size_4()
+                                    .text_color(cx.theme().muted_foreground),
+                            )
+                            .tooltip_with_action(
+                                "Toggle right panel",
+                                &crate::ui::panel::TogglePanel,
+                                Some("Chat"),
+                            )
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.toggle_panel(window, cx)),
+                            ),
+                    ))
+                    .children(self.profile_label.clone().map(|name| {
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(name)
+                    }))
+                    .child(no_drag(self.account_chip(cx))),
             )
     }
 
-    /// The bar's middle: the open session's title, on one line; the model
-    /// is the composer's to show. Drawn over the bar, so it stays in the
-    /// window's middle whatever the two sides hold.
+    /// The chat header's title: the open session's, on one line at its
+    /// start; the model is the composer's to show.
     fn bar_title(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let active = self.store.active;
         let title = self.store.conversations[active].title.trim();
@@ -110,20 +121,13 @@ impl Chat {
             title.to_owned().into()
         };
         div()
-            .absolute()
-            .inset_0()
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(
-                div()
-                    .max_w(px(420.))
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(cx.theme().foreground)
-                    .truncate()
-                    .child(title),
-            )
+            .flex_1()
+            .min_w_0()
+            .text_sm()
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(cx.theme().foreground)
+            .truncate()
+            .child(title)
     }
 
     /// A quiet field that opens the palette, so the palette, and the key

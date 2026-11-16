@@ -250,6 +250,8 @@ pub(crate) struct Chat {
     pub(crate) sidebar_open: bool,
     /// When the sidebar last began to open or fold; see `ui::sidebar`.
     pub(crate) sidebar_moved: Option<std::time::Instant>,
+    /// How wide the sidebar was last drawn, which the title bar matches.
+    pub(crate) sidebar_drawn: Pixels,
     /// The sidebar, the panel and the chat's rows coming in.
     pub(crate) motion: crate::ui::motion::Moves,
     pub(crate) greeting: &'static str,
@@ -1026,6 +1028,7 @@ impl Chat {
             show_setup,
             sidebar_open: true,
             sidebar_moved: None,
+            sidebar_drawn: crate::ui::sidebar::SIDEBAR_WIDTH,
             motion: Default::default(),
             greeting,
             account,
@@ -5470,8 +5473,7 @@ impl Render for Chat {
                     div()
                         .relative()
                         .flex_shrink_0()
-                        .child(self.title_bar(window, cx))
-                        .children(self.grain(&self.grains.title_bar)),
+                        .child(self.title_bar(window, cx)),
                 )
             })
             .when(!welcome, |this| {

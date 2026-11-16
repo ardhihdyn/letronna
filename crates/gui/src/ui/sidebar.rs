@@ -117,7 +117,7 @@ impl Chat {
             // A page is an icon in the dock at the drawer's foot, named
             // under the pointer; the sessions have the room.
             Nav::Page(_) => row
-                .size(px(30.))
+                .size(px(28.))
                 .justify_center()
                 .rounded(theme.radius)
                 .when(active, |this| this.bg(accent))
@@ -187,6 +187,7 @@ impl Chat {
         };
         if t >= 1. {
             self.sidebar_moved = None;
+            self.sidebar_drawn = self.sidebar_room();
             return if self.sidebar_open {
                 self.sidebar(window, cx).into_any_element()
             } else {
@@ -198,12 +199,13 @@ impl Chat {
         } else {
             (SIDEBAR_WIDTH, RAIL_WIDTH)
         };
+        self.sidebar_drawn = from + (to - from) * t;
         div()
             .h_full()
             .flex_shrink_0()
             .overflow_hidden()
             .bg(cx.theme().sidebar)
-            .w(from + (to - from) * t)
+            .w(self.sidebar_drawn)
             .child(self.sidebar(window, cx))
             .into_any_element()
     }
@@ -233,7 +235,7 @@ impl Chat {
                 })
                 .child(Icon::new(icon).size_4().text_color(tint))
         };
-        let mut rail = v_flex()
+        let rail = v_flex()
             .id("sidebar-rail")
             .w(RAIL_WIDTH)
             .h_full()
@@ -259,6 +261,7 @@ impl Chat {
                 )),
             )
             .child(div().flex_1());
+        let mut rail = rail;
         for page in PAGES
             .into_iter()
             .filter(|&page| page != Page::Workflows || workflows)
@@ -270,7 +273,39 @@ impl Chat {
                 ),
             );
         }
-        rail
+        rail.child(self.settings_button(cx))
+    }
+
+    /// Settings, at the end of the pages wherever the sidebar is: a gear
+    /// that is always in sight, with its key in the tooltip.
+    fn settings_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let accent = theme.sidebar_accent;
+        div()
+            .id("sidebar-settings")
+            .size(px(28.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(theme.radius)
+            .cursor_pointer()
+            .when(self.settings_open, |this| this.bg(accent))
+            .hover(move |s| s.bg(accent.opacity(0.6)))
+            .tooltip(|window, cx| {
+                gpui_component::tooltip::Tooltip::new("Settings")
+                    .action(&OpenSettings, None)
+                    .build(window, cx)
+            })
+            .child(
+                Icon::new(IconName::Settings)
+                    .size_4()
+                    .text_color(theme.muted_foreground),
+            )
+            .on_click(cx.listener(|this, _, window, cx| {
+                if !this.settings_open {
+                    this.open_settings(window, cx)
+                }
+            }))
     }
 
     /// Go to `page` as its sidebar row does, reading afresh what it lists.
@@ -689,7 +724,7 @@ impl Chat {
             })
             .collect();
         let mut new = div().px_2().pt_2();
-        let mut dock = h_flex().justify_between().px_2().py_2();
+        let mut dock = h_flex().justify_between().px_1p5().py_2();
         for (at, &row) in rows.iter().enumerate() {
             let item = self.nav_item(row, at, &handles, cx);
             match row {
@@ -905,7 +940,7 @@ impl Chat {
                 div()
                     .border_t_1()
                     .border_color(cx.theme().sidebar_accent)
-                    .child(dock),
+                    .child(dock.child(self.settings_button(cx))),
             )
             .children(self.ring(crate::ui::keys::Region::Sidebar, cx))
             .children(self.open_session_menu_layer())

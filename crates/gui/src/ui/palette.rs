@@ -25,7 +25,7 @@ enum Pick {
     Skill(String),
     Model(String, String),
     Folder(PathBuf),
-    /// An appearance setting's value: "" Night, "paper" or "system".
+    /// An appearance setting's value: "" Night, "ink", "paper", "sand" or "system".
     Look(&'static str),
     /// Pick the project folder of the session on screen.
     ChooseFolder,
@@ -170,9 +170,11 @@ const PAGES: &[(Page, AppIcon)] = &[
 ];
 
 /// The appearances the palette offers, as the setting stores them.
-const LOOKS: [(&str, &str); 3] = [
+const LOOKS: [(&str, &str); 5] = [
     ("", "Night appearance"),
+    ("ink", "Ink appearance"),
     ("paper", "Paper appearance"),
+    ("sand", "Sand appearance"),
     ("system", "Follow the system's appearance"),
 ];
 

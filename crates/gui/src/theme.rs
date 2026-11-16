@@ -202,6 +202,50 @@ const PAPER_PALETTE: Palette = Palette {
     hover: 0xe6e8ee,
 };
 
+/// Ink, the phone's Night on true black, for an OLED screen.
+const INK_PALETTE: Palette = Palette {
+    mode: ThemeMode::Dark,
+    page: 0x000000,
+    text: 0xe6e8f0,
+    muted: 0x8a90a8,
+    raised: 0x0e1018,
+    code: 0x0e1018,
+    hairline: 0x22263a,
+    frame: 0x000000,
+    frame_text: 0xced1e8,
+    frame_on: 0x141b3d,
+    link: SIGNAL,
+    selected: 0x0b1433,
+    selection: 0.4,
+    danger: DANGER,
+    danger_pressed: DANGER_PRESSED,
+    on_danger: 0x000000,
+    green: GREEN,
+    hover: 0x161928,
+};
+
+/// Sand, the phone's Paper warmed: dark brown ink on a sand page.
+const SAND_PALETTE: Palette = Palette {
+    mode: ThemeMode::Light,
+    page: 0xf4efe6,
+    text: 0x2b2118,
+    muted: 0x6e5c49,
+    raised: 0xfbf8f2,
+    code: 0xeae3d6,
+    hairline: 0xd8cdbb,
+    frame: 0xe9e0d0,
+    frame_text: 0x2b2118,
+    frame_on: 0xdccfb8,
+    link: 0x1f4fd8,
+    selected: 0xe2d8c6,
+    selection: 0.22,
+    danger: CRIMSON,
+    danger_pressed: CRIMSON_PRESSED,
+    on_danger: 0xf4efe6,
+    green: FOREST,
+    hover: 0xe5dccc,
+};
+
 /// The palette a setting asks for: "paper", "system" to match the
 /// computer's light or dark mode, and anything else Night.
 fn palette_for(setting: &str, system: WindowAppearance) -> &'static Palette {
@@ -211,6 +255,8 @@ fn palette_for(setting: &str, system: WindowAppearance) -> &'static Palette {
     );
     match setting {
         "paper" => &PAPER_PALETTE,
+        "sand" => &SAND_PALETTE,
+        "ink" => &INK_PALETTE,
         "system" if light => &PAPER_PALETTE,
         _ => &NIGHT_PALETTE,
     }
@@ -221,7 +267,7 @@ fn palette_for(setting: &str, system: WindowAppearance) -> &'static Palette {
 fn pinned_dark(setting: &str) -> Option<bool> {
     match setting {
         "system" => None,
-        "paper" => Some(false),
+        "paper" | "sand" => Some(false),
         _ => Some(true),
     }
 }
@@ -512,6 +558,38 @@ mod tests {
             let channel = c as f32 * opacity + g as f32 * (1. - opacity);
             mixed | ((channel.round() as u32) << shift)
         })
+    }
+
+    #[test]
+    fn every_ink_and_sand_text_colour_passes_aa_on_its_surface() {
+        for p in [&super::INK_PALETTE, &super::SAND_PALETTE] {
+            let pairs = [
+                ("text on the page", p.text, p.page),
+                ("muted on the page", p.muted, p.page),
+                ("text on raised", p.text, p.raised),
+                ("muted on raised", p.muted, p.raised),
+                ("text on a code block", p.text, p.code),
+                ("muted on a code block", p.muted, p.code),
+                ("text on a selected row", p.text, p.selected),
+                ("muted on a selected row", p.muted, p.selected),
+                ("link on the page", p.link, p.page),
+                ("link on raised", p.link, p.raised),
+                ("frame text on the frame", p.frame_text, p.frame),
+                ("muted on the frame", p.muted, p.frame),
+                ("frame text on its selected row", p.frame_text, p.frame_on),
+                ("danger on the page", p.danger, p.page),
+                ("on-danger on danger", p.on_danger, p.danger),
+                ("green on the page", p.green, p.page),
+            ];
+            for (what, text, surface) in pairs {
+                let ratio = contrast(text, surface);
+                assert!(
+                    ratio >= 4.5,
+                    "{what} reads at {ratio:.2}:1 on {:06x}, under 4.5:1",
+                    p.page
+                );
+            }
+        }
     }
 
     #[test]

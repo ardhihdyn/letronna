@@ -2060,13 +2060,19 @@ fn appearance_page(
     window: &mut Window,
     cx: &mut App,
 ) -> Div {
-    const LOOKS: [(&str, &str, &str); 3] = [
+    const LOOKS: [(&str, &str, &str); 5] = [
         ("", "night", "Night — midnight blue around a dark ink page"),
+        (
+            "ink",
+            "ink",
+            "Ink — Night on true black, for an OLED screen",
+        ),
         (
             "paper",
             "paper",
             "Paper — ink on a light page, for daylight",
         ),
+        ("sand", "sand", "Sand — Paper warmed, brown ink on sand"),
         (
             "system",
             "system",

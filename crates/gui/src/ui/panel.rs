@@ -86,6 +86,8 @@ const PREVIEW_FOOTER: Pixels = px(22.);
 pub(crate) enum PanelTab {
     /// What the agent does in the turn on screen, as it does it.
     Work,
+    /// The points the project's files can be put back to.
+    Checkpoints,
     Browser,
     Changes,
     Files,
@@ -96,8 +98,9 @@ pub(crate) enum PanelTab {
 
 impl PanelTab {
     /// The window's own tabs, in the order the bar shows them.
-    const OWN: [PanelTab; 5] = [
+    const OWN: [PanelTab; 6] = [
         PanelTab::Work,
+        PanelTab::Checkpoints,
         PanelTab::Browser,
         PanelTab::Changes,
         PanelTab::Files,
@@ -119,6 +122,7 @@ impl PanelTab {
     fn label(self) -> String {
         match self {
             PanelTab::Work => "Work".into(),
+            PanelTab::Checkpoints => "Checkpoints".into(),
             PanelTab::Browser => "Browser".into(),
             PanelTab::Changes => "Changes".into(),
             PanelTab::Files => "Files".into(),
@@ -270,6 +274,7 @@ impl Chat {
     fn tab_state(&self, tab: PanelTab, cx: &App) -> Option<usize> {
         match tab {
             PanelTab::Work => self.has_work().then_some(0),
+            PanelTab::Checkpoints => self.has_checkpoints().then_some(0),
             PanelTab::Browser => {
                 let browser = self.browser.read(cx);
                 browser.is_open().then(|| browser.waiting())
@@ -300,6 +305,7 @@ impl Chat {
     fn tab_body(&self, tab: PanelTab, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         match tab {
             PanelTab::Work => self.work_tab(cx),
+            PanelTab::Checkpoints => self.checkpoints_tab(cx),
             PanelTab::Browser => self.browser.clone().into_any_element(),
             PanelTab::Changes => self.changes_tab(cx),
             PanelTab::Files => self.files_tab(window, cx),
@@ -954,6 +960,7 @@ mod tests {
             shown_tabs(own(), |_| Some(0)),
             vec![
                 (PanelTab::Work, 0),
+                (PanelTab::Checkpoints, 0),
                 (PanelTab::Browser, 0),
                 (PanelTab::Changes, 0),
                 (PanelTab::Files, 0),

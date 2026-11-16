@@ -256,6 +256,8 @@ pub(crate) struct Chat {
     pub(crate) work_pick: Option<usize>,
     /// The Work tab has opened for the turn under way.
     pub(crate) work_seen: bool,
+    /// The checkpoint whose Restore was pressed once, by its turn's first message.
+    pub(crate) checkpoint_asking: Option<usize>,
     /// The sidebar, the panel and the chat's rows coming in.
     pub(crate) motion: crate::ui::motion::Moves,
     pub(crate) greeting: &'static str,
@@ -1035,6 +1037,7 @@ impl Chat {
             sidebar_drawn: crate::ui::sidebar::SIDEBAR_WIDTH,
             work_pick: None,
             work_seen: false,
+            checkpoint_asking: None,
             motion: Default::default(),
             greeting,
             account,

@@ -55,6 +55,7 @@ pub(crate) mod voice;
 pub(crate) mod wallet;
 pub(crate) mod web_search;
 pub(crate) mod work;
+pub(crate) mod checkpoints;
 pub(crate) mod workflows;
 
 use crate::prelude::*;

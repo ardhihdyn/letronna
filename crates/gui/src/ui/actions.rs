@@ -654,7 +654,7 @@ impl Chat {
         cx.spawn_in(window, async move |this, cx| {
             let done = restored.await;
             let said = done.lines().join("\n");
-            let _ = this.update_in(cx, |this, window, cx| {
+            let _ = this.update_in(cx, |this, _window, cx| {
                 if tell {
                     this.tell_put_back(session, &done);
                 }
@@ -662,9 +662,9 @@ impl Chat {
                 this.turn_files_for = None;
                 cx.notify();
                 if !done.left.is_empty() {
-                    window.push_notification(Notification::warning(said), cx);
+                    this.toast(said, crate::ui::toast::Kind::Warning, cx);
                 } else if !said.is_empty() {
-                    window.push_notification(Notification::success(said), cx);
+                    this.toast(said, crate::ui::toast::Kind::Info, cx);
                 }
                 // The Changes tab and the status bar count what went back.
                 this.refresh_changes(cx);
@@ -1201,7 +1201,7 @@ impl Chat {
 
     /// Whether nothing holds the session: no reply running, and no summary
     /// being made, which a rewind or another summary would cut under.
-    fn idle(&self) -> bool {
+    pub(crate) fn idle(&self) -> bool {
         let open = self.store.conversations[self.store.active].id;
         !self.busy && !self.compacting.contains(&open)
     }

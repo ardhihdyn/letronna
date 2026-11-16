@@ -421,8 +421,38 @@ impl Chat {
             .rounded(cx.theme().radius)
             .cursor_pointer()
             .text_sm()
-            .when(active || selected, |this| {
-                this.bg(cx.theme().sidebar_accent)
+            .when(selected, |this| this.bg(cx.theme().sidebar_accent))
+            // The session on screen: its fill sweeps in from the left, with
+            // a blue bar standing up at its edge, each time it is picked.
+            .when(active, |this| {
+                let (shade, bar) = (cx.theme().sidebar_accent, cx.theme().link);
+                let highlight = div()
+                    .absolute()
+                    .top_0()
+                    .bottom_0()
+                    .left_0()
+                    .w_full()
+                    .rounded(cx.theme().radius)
+                    .bg(shade)
+                    .child(
+                        div()
+                            .absolute()
+                            .left_0()
+                            .top(px(6.))
+                            .bottom(px(6.))
+                            .w(px(3.))
+                            .rounded_full()
+                            .bg(bar),
+                    );
+                if cx.reduce_motion() {
+                    this.child(highlight)
+                } else {
+                    this.child(highlight.with_animation(
+                        ("session-pick", id as usize),
+                        crate::ui::motion::enter(std::time::Duration::from_millis(280)),
+                        |el, t| el.w(relative(0.3 + 0.7 * t)).opacity(t.min(1.)),
+                    ))
+                }
             })
             .active(|s| s.bg(cx.theme().sidebar_accent.opacity(0.6)))
             .when(selecting, |this| this.child(check_box(selected, cx)))

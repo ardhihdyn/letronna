@@ -608,6 +608,9 @@ impl Chat {
                 [],
                 cx,
             ))
+            .child(section_title("Built in", cx))
+            .child(self.built_in(cx))
+            .child(section_title("Added", cx))
             .child(
                 h_flex()
                     .gap_2()
@@ -629,9 +632,6 @@ impl Chat {
                             ),
                     ),
             )
-            .child(section_title("Built in", cx))
-            .child(self.built_in(cx))
-            .child(section_title("Added", cx))
             .children(note)
             .children(problem)
             .children(empty)

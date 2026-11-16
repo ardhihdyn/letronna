@@ -47,7 +47,6 @@ pub(crate) mod sidebar;
 pub(crate) mod skills;
 pub(crate) mod switcher;
 pub(crate) mod toast;
-pub(crate) mod work;
 pub(crate) mod typed;
 pub(crate) mod update;
 pub(crate) mod usage;
@@ -55,6 +54,7 @@ pub(crate) mod viewer;
 pub(crate) mod voice;
 pub(crate) mod wallet;
 pub(crate) mod web_search;
+pub(crate) mod work;
 pub(crate) mod workflows;
 
 use crate::prelude::*;
@@ -129,9 +129,10 @@ pub(crate) fn page_header(
                         .flex_1()
                         .min_w_0()
                         .truncate()
-                        .text_xl()
-                        .font_family(HEADING_FONT)
+                        .font_family(WORDMARK_FONT)
                         .font_weight(FontWeight::SEMIBOLD)
+                        .text_size(px(30.))
+                        .line_height(px(38.))
                         .child(title.into()),
                 )
                 .child(

@@ -1418,7 +1418,7 @@ pub(crate) fn heading(title: &'static str, blurb: &'static str, cx: &App) -> Div
         .gap_1()
         .child(
             div()
-                .text_base()
+                .text_lg()
                 .font_family(HEADING_FONT)
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(title),

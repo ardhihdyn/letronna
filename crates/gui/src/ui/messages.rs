@@ -2126,9 +2126,10 @@ impl Chat {
             .gap_2()
             .child(
                 div()
-                    .text_xl()
-                    .font_family(HEADING_FONT)
+                    .font_family(WORDMARK_FONT)
                     .font_weight(FontWeight::SEMIBOLD)
+                    .text_size(px(30.))
+                    .line_height(px(38.))
                     .child(page.title()),
             )
             .child(

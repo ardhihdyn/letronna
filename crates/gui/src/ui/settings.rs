@@ -4073,16 +4073,20 @@ fn browser_sign_in(
     let (go, paste, cancel) = (chat.clone(), chat.clone(), chat.clone());
     let remove = chat.clone();
     let body = v_flex().gap_3().children(caveat.map(|caveat| {
+        // Wraps: a caveat runs longer than the box is wide.
         h_flex()
+            .w_full()
             .gap_2()
-            .items_center()
+            .items_start()
             .text_xs()
             .child(
                 Icon::new(IconName::Info)
                     .size_3p5()
+                    .mt(px(1.))
+                    .flex_shrink_0()
                     .text_color(cx.theme().muted_foreground),
             )
-            .child(caveat)
+            .child(div().flex_1().min_w_0().child(caveat))
     }));
     if !waiting {
         return body.child(

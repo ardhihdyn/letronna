@@ -758,6 +758,42 @@ impl Chat {
             } else {
                 None
             };
+            // A plan signed in to in the browser is signed in to here too,
+            // not only under Settings › Accounts.
+            let waiting = self.provider_sign_in.is_some();
+            let sign_in = provider
+                .filter(|_| enabled)
+                .filter(|name| {
+                    matches!(
+                        letronna_core::providers::find(name).map(|p| p.auth()),
+                        Some(letronna_core::providers::AuthKind::OAuth(_))
+                    )
+                })
+                .map(|name| {
+                    let signed = letronna_core::providers::auth::signed_in(name);
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(div().flex_1().text_xs().text_color(muted).child(if signed {
+                            "Signed in. Its models are in the model list."
+                        } else {
+                            "Sign in with your plan to use its models. No key to paste."
+                        }))
+                        .child(if signed {
+                            tag("Signed in").into_any_element()
+                        } else if waiting {
+                            tag("Waiting for the browser…").into_any_element()
+                        } else {
+                            Button::new(SharedString::from(format!("plugin-sign-in-{id}")))
+                                .primary()
+                                .small()
+                                .label("Sign in with browser")
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.provider_sign_in(name, window, cx)
+                                }))
+                                .into_any_element()
+                        })
+                });
             list = list.child(
                 v_flex()
                     .gap_2()
@@ -765,6 +801,7 @@ impl Chat {
                     .py_3()
                     .when(n > 0, |this| this.border_t_1().border_color(border))
                     .child(row)
+                    .children(sign_in)
                     .children(settings),
             );
         }

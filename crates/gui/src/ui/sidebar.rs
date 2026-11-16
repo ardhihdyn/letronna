@@ -54,6 +54,7 @@ fn page_icon(page: Page) -> AppIcon {
         Page::Workflows => AppIcon::Workflow,
         Page::Wallet => AppIcon::Wallet,
         Page::Tasks => AppIcon::Checklist,
+        Page::Import => AppIcon::PopIn,
     }
 }
 
@@ -321,6 +322,7 @@ impl Chat {
             Page::Artifacts => self.read_artifacts(cx),
             Page::Wallet => self.read_wallet(true, cx),
             Page::Plugins => self.reload_plugins(),
+            Page::Import => return self.open_import_page(window, cx),
             Page::Chat | Page::Messaging | Page::Tasks => {}
         }
         self.page = page;

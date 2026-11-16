@@ -160,6 +160,7 @@ fn commands() -> Vec<(&'static str, Rc<dyn Action>)> {
 /// The pages the sidebar goes to, with its icons.
 const PAGES: &[(Page, AppIcon)] = &[
     (Page::Tasks, AppIcon::Checklist),
+    (Page::Import, AppIcon::PopIn),
     (Page::Capabilities, AppIcon::Sparkles),
     (Page::Plugins, AppIcon::Puzzle),
     (Page::Messaging, AppIcon::MessageSquare),
@@ -681,6 +682,7 @@ mod tests {
             Page::Workflows,
             Page::Wallet,
             Page::Tasks,
+            Page::Import,
         ];
         for page in pages {
             let listed = PAGES.iter().any(|&(p, _)| p == page);

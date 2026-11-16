@@ -126,6 +126,7 @@ pub(crate) enum Page {
     Workflows,
     Wallet,
     Tasks,
+    Import,
 }
 impl Page {
     pub(crate) fn title(self) -> &'static str {
@@ -140,6 +141,7 @@ impl Page {
             Page::Workflows => "Workflows",
             Page::Wallet => "Wallet",
             Page::Tasks => "Tasks",
+            Page::Import => "Import",
         }
     }
     pub(crate) fn blurb(self) -> &'static str {
@@ -160,6 +162,7 @@ impl Page {
             // Wallet renders its own page too.
             Page::Wallet => "The wallets Letronna pays from.",
             Page::Tasks => "Each session's checklist, by project.",
+            Page::Import => "Sessions from Claude Code, Codex and other tools.",
         }
     }
 }
@@ -264,6 +267,8 @@ pub(crate) struct Chat {
     pub(crate) work_seen: bool,
     /// The checkpoint whose Restore was pressed once, by its turn's first message.
     pub(crate) checkpoint_asking: Option<usize>,
+    /// The Import page's scan and what it found.
+    pub(crate) imports: crate::ui::import_page::ImportState,
     /// The sidebar, the panel and the chat's rows coming in.
     pub(crate) motion: crate::ui::motion::Moves,
     pub(crate) greeting: &'static str,
@@ -1044,6 +1049,7 @@ impl Chat {
             work_pick: None,
             work_seen: false,
             checkpoint_asking: None,
+            imports: Default::default(),
             motion: Default::default(),
             greeting,
             account,
@@ -5114,6 +5120,8 @@ impl Render for Chat {
             self.workflows_page(window, cx).into_any_element()
         } else if self.page == Page::Artifacts {
             self.artifacts_page(cx).into_any_element()
+        } else if self.page == Page::Import {
+            self.import_page(cx).into_any_element()
         } else if self.page == Page::Tasks {
             self.tasks_page(cx).into_any_element()
         } else if self.page == Page::Wallet {

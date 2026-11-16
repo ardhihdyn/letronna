@@ -30,6 +30,7 @@ pub(crate) const PAGES: &[(&str, AppIcon)] = &[
     ("Privacy", AppIcon::Shield),
     ("Permissions", AppIcon::Checklist),
     ("Wallet", AppIcon::Wallet),
+    ("Import", AppIcon::PopIn),
     ("Shortcuts", AppIcon::Keyboard),
     ("About", AppIcon::Info),
 ];
@@ -1098,6 +1099,8 @@ impl Chat {
         let back = step.clone();
         let nav = PAGES.iter().zip(handles.iter()).fold(
             v_flex()
+                .id("settings-nav")
+                .overflow_y_scroll()
                 .w(px(210.))
                 .h_full()
                 .flex_shrink_0()
@@ -1120,7 +1123,7 @@ impl Chat {
                     "Accounts" => Some("Models"),
                     "Appearance" => Some("App"),
                     "Privacy" => Some("Safety"),
-                    "Shortcuts" => Some("More"),
+                    "Import" => Some("More"),
                     _ => None,
                 };
                 // One quiet tile for every page; only the open one is blue.
@@ -1210,6 +1213,33 @@ impl Chat {
             "Thinking" => thinking_page(&chat, &self.store, self.servers_found.as_ref(), window, cx)
                 .into_any_element(),
             "Permissions" => self.permissions_page(cx).into_any_element(),
+            "Import" => {
+                let to = chat.clone();
+                v_flex()
+                    .gap_5()
+                    .child(heading(
+                        "Import sessions",
+                        "Carry on a session started in Claude Code or Codex, or in Cursor, \
+                         Gemini CLI, opencode and others. Their sessions are only read; the \
+                         originals are never changed.",
+                        cx,
+                    ))
+                    .child(
+                        h_flex().child(
+                            Button::new("settings-open-import")
+                                .primary()
+                                .icon(Icon::new(AppIcon::PopIn))
+                                .label("Scan this computer")
+                                .on_click(move |_, window, cx| {
+                                    to.update(cx, |this, cx| {
+                                        this.close_settings(window, cx);
+                                        this.open_import_page(window, cx);
+                                    })
+                                }),
+                        ),
+                    )
+                    .into_any_element()
+            }
             "Shortcuts" => shortcuts_page(&hotkey, &chat, cx).into_any_element(),
             "Wallet" => super::wallet::wallet_settings(&chat, &self.wallet, cx).into_any_element(),
             "Memory" => v_flex()

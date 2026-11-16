@@ -19,6 +19,7 @@ pub(crate) mod from_link;
 pub(crate) mod grain;
 pub(crate) mod handoff;
 pub(crate) mod import;
+pub(crate) mod import_page;
 pub(crate) mod jobs;
 pub(crate) mod keys;
 pub(crate) mod mcp;

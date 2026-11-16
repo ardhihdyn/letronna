@@ -74,6 +74,7 @@ fn does(name: &str) -> Option<Does> {
         "agents" => Does::Page(Page::Activity),
         "wallet" => Does::Page(Page::Wallet),
         "tasks" => Does::Page(Page::Tasks),
+        "import" => Does::Page(Page::Import),
         _ => return None,
     })
 }
@@ -87,7 +88,6 @@ const TERMINAL_ONLY: &[&str] = &[
     "exit",
     "fallback",
     "gateways",
-    "import",
     "insights",
     "login",
     "logout",

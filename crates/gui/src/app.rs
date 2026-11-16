@@ -1036,7 +1036,11 @@ impl Chat {
             !store.settings.custom_endpoint.trim().is_empty()
                 || !letronna_core::gateway::own().is_empty()
                 // A model downloaded to this computer answers with nothing set up.
-                || !letronna_core::on_device::shelf::ready_ids().is_empty(),
+                || !letronna_core::on_device::shelf::ready_ids().is_empty()
+                // A plan signed in to in the browser answers too.
+                || letronna_core::providers::all()
+                    .iter()
+                    .any(|p| letronna_core::providers::auth::signed_in(p.info().name)),
             active.messages.is_empty(),
         )
         .then_some(active.id);
@@ -1394,6 +1398,15 @@ impl Chat {
                     this.loading_models = false;
                     this.models = models;
                     this.media_models = media;
+                    // Nothing picked yet, as when the first way in was a
+                    // plan or a key: the newest model listed starts, so the
+                    // first message is not refused for want of one.
+                    if this.store.settings.model.trim().is_empty()
+                        && let Some((gateway, id)) = this.models.first().cloned()
+                    {
+                        this.store.choose_model(this.store.active, &gateway, &id);
+                        this.save();
+                    }
                     // One gateway failing still leaves the others usable.
                     this.gateway_error = (!errors.is_empty()).then(|| errors.join(" · "));
                     if this.models.is_empty() {
@@ -1849,12 +1862,16 @@ impl Chat {
             .update(cx, |input, cx| input.set_value("", window, cx));
         // Setting the box raises no change, so the chip is put right here.
         self.crew_reset(cx);
+        let typed = prompt.clone();
         let sent = if elsewhere {
             self.send_beside(prompt, images, cx)
         } else {
             self.dispatch(prompt, images, None, cx)
         };
         if sent.is_err() {
+            // Not sent, so not lost: the box keeps it to send again.
+            self.composer
+                .update(cx, |input, cx| input.set_value(typed, window, cx));
             self.not_sent(window, cx);
         } else {
             self.attachments.remove(&session);

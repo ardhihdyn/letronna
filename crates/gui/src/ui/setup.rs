@@ -13,10 +13,91 @@ pub(crate) fn needed(signed_in: bool, has_key: bool, has_endpoint: bool, empty_c
     !signed_in && !has_key && !has_endpoint && empty_chat
 }
 
+use letronna_core::providers::auth;
+
+/// The built-in plugins that bring a plan signed in to in the browser:
+/// (plugin id, its name, its provider, whether it is on).
+fn plans(cx: &App) -> Vec<(&'static str, &'static str, &'static str, bool)> {
+    (crate::plugins::list(cx).into_iter())
+        .filter_map(|info| {
+            let name = info.provider?;
+            matches!(
+                letronna_core::providers::find(name).map(|p| p.auth()),
+                Some(letronna_core::providers::AuthKind::OAuth(_))
+            )
+            .then_some((info.id, info.name, name, info.enabled))
+        })
+        .collect()
+}
+
 /// How many models the setup page lists before pointing at the picker.
 const SETUP_MODELS: usize = 50;
 
 impl Chat {
+    /// Whether a plan signed in to in the browser, ChatGPT or Claude, is
+    /// signed in, with its plugin on.
+    fn plans_signed_in(&self, cx: &App) -> bool {
+        plans(cx)
+            .iter()
+            .any(|(_, _, name, on)| *on && auth::signed_in(name))
+    }
+
+    /// One row per plan: sign in with the browser, which switches its plugin
+    /// on first, or Signed in.
+    fn plan_rows(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let muted = cx.theme().muted_foreground;
+        let waiting = self.provider_sign_in.is_some();
+        let mut rows = v_flex().gap_2();
+        for (id, title, name, on) in plans(cx) {
+            let signed = on && auth::signed_in(name);
+            rows = rows.child(
+                h_flex()
+                    .gap_3()
+                    .items_center()
+                    .px_4()
+                    .py_3()
+                    .rounded(cx.theme().radius)
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .child(div().font_weight(FontWeight::MEDIUM).child(title))
+                            .child(div().text_xs().text_color(muted).child(if signed {
+                                "Signed in. Its models are ready."
+                            } else {
+                                "Opens your browser to sign in."
+                            })),
+                    )
+                    .child(if signed {
+                        Icon::new(IconName::Check)
+                            .size_4()
+                            .text_color(cx.theme().green)
+                            .into_any_element()
+                    } else {
+                        Button::new(SharedString::from(format!("setup-plan-{id}")))
+                            .primary()
+                            .small()
+                            .label(if waiting {
+                                "Waiting for the browser…"
+                            } else {
+                                "Sign in with browser"
+                            })
+                            .disabled(waiting)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                if !on {
+                                    crate::plugins::set_enabled(cx, id, true);
+                                }
+                                this.provider_sign_in(name, window, cx);
+                            }))
+                            .into_any_element()
+                    }),
+            );
+        }
+        rows
+    }
+
     /// Bring the page back, whatever is reachable by now.
     pub(crate) fn open_setup(&mut self, cx: &mut Context<Self>) {
         self.page = Page::Chat;
@@ -206,6 +287,11 @@ impl Chat {
                 self.account.is_some(),
             ),
             (
+                "My ChatGPT or Claude plan",
+                "Sign in with the plan you already pay for. No key to paste.",
+                self.plans_signed_in(cx),
+            ),
+            (
                 "My own API key",
                 "OpenAI, Anthropic, OpenRouter, OpenCode Go/Zen, or any compatible server.",
                 self.key_gateway_rows().iter().any(|r| r.set_up),
@@ -290,7 +376,8 @@ impl Chat {
         }
         let detail = match picked {
             0 => self.sign_in_row(chat, cx).into_any_element(),
-            1 => super::settings::gateway_list(
+            1 => self.plan_rows(cx).into_any_element(),
+            2 => super::settings::gateway_list(
                 self.key_gateway_rows(),
                 &self.gateway_pick,
                 &self.endpoint,

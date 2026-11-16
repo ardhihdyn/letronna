@@ -38,28 +38,6 @@ pub(crate) const PAGES: &[(&str, AppIcon)] = &[
 const SHEET_WIDTH: f32 = 1000.;
 const SHEET_RADIUS: f32 = 22.;
 
-/// The colour of a settings page's icon tile, as a phone's settings give
-/// each row its own.
-fn tile_colour(page: &str) -> Hsla {
-    let hex = match page {
-        "Account" => 0x2f6bff,
-        "Usage" => 0x8e5cf7,
-        "Accounts" => 0x1fa971,
-        "Search" => 0x0ea5e9,
-        "Model" => 0x3d5afe,
-        "On this computer" => 0x64748b,
-        "Appearance" => 0xec4899,
-        "Thinking" => 0xf59e0b,
-        "Memory" => 0x14b8a6,
-        "Privacy" => 0x475569,
-        "Permissions" => 0xef4444,
-        "Wallet" => 0x10b981,
-        "Shortcuts" => 0x6366f1,
-        _ => 0x94a3b8,
-    };
-    gpui::rgb(hex).into()
-}
-
 /// How far down the window toasts start: below settings' close button and
 /// its focus ring, past settings' 44px margin and the button's row, 12px
 /// in and 20px tall. At gpui-component's 50px an error covered both.
@@ -1145,7 +1123,12 @@ impl Chat {
                     "Shortcuts" => Some("More"),
                     _ => None,
                 };
-                let tile = tile_colour(name);
+                // One quiet tile for every page; only the open one is blue.
+                let (tile, glyph) = if active {
+                    (cx.theme().primary, cx.theme().primary_foreground)
+                } else {
+                    (cx.theme().sidebar_accent, cx.theme().muted_foreground)
+                };
                 let nav = nav.children(label.map(|label| {
                     div()
                         .px_2()
@@ -1185,7 +1168,7 @@ impl Chat {
                                 .justify_center()
                                 .rounded(px(6.))
                                 .bg(tile)
-                                .child(Icon::new(*icon).size_3p5().text_color(gpui::white())),
+                                .child(Icon::new(*icon).size_3p5().text_color(glyph)),
                         )
                         .child(*name)
                         .on_click(move |_, _, cx| show_page(name, &page, &chat, cx)),

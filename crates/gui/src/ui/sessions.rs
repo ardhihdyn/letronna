@@ -402,6 +402,11 @@ impl Chat {
                 .item(item("Decisions", AppIcon::Shield, Chat::show_decisions))
                 .separator()
                 .item(item(
+                    "Copy as Markdown",
+                    AppIcon::FileText,
+                    Chat::copy_session,
+                ))
+                .item(item(
                     "Export as Markdown",
                     AppIcon::Export,
                     Chat::export_session,
@@ -1140,6 +1145,24 @@ impl Chat {
                     .tooltip("More")
                     .dropdown_menu(menu),
             )
+    }
+
+    /// Put session `index` on the clipboard as Markdown, to paste to a
+    /// teammate or into an issue.
+    pub(crate) fn copy_session(
+        &mut self,
+        index: usize,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.fill_now(index);
+        let text = markdown_of(&self.store.conversations[index]);
+        cx.write_to_clipboard(ClipboardItem::new_string(text));
+        self.toast(
+            "Copied: The session is on the clipboard as Markdown.",
+            crate::ui::toast::Kind::Info,
+            cx,
+        );
     }
 
     pub(crate) fn export_session(

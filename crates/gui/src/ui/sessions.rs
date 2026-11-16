@@ -312,7 +312,7 @@ fn markdown_of(c: &Conversation) -> String {
 
 /// The file name a session called `title` is exported under, less its
 /// `.md`: letters, digits and spaces kept, anything else a dash.
-fn export_name(title: &str) -> String {
+pub(crate) fn export_name(title: &str) -> String {
     title
         .chars()
         .map(|ch| {
@@ -410,6 +410,11 @@ impl Chat {
                     "Export as Markdown",
                     AppIcon::Export,
                     Chat::export_session,
+                ))
+                .item(item(
+                    "Save as web page",
+                    AppIcon::Export,
+                    Chat::save_session_page,
                 ))
                 .item(item("Import a session", AppIcon::PopIn, Chat::open_import))
                 .separator()

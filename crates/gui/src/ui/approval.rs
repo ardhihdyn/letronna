@@ -790,6 +790,19 @@ impl Chat {
                             this.resolve_call(Verdict::AllowHere, cx)
                         }))
                 }))
+                // Its opposite, a lasting no for calls like it here.
+                .children(self.offer.as_ref().map(|rule| {
+                    Button::new("deny-here")
+                        .plain(cx)
+                        .small()
+                        .label(format!("Never allow `{}` here", rule.pattern))
+                        .tooltip("Deny this, and refuse calls like it in this project from now on. Settings › Permissions undoes it.")
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            let reason = this.take_reason(window, cx);
+                            this.keys_back(false, window, cx);
+                            this.resolve_call(Verdict::DenyHere(reason), cx)
+                        }))
+                }))
                 // Beside Deny, which sends what is typed here, and wrapping
                 // with it; enter in the field denies too.
                 .child(

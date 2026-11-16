@@ -88,6 +88,9 @@ pub(crate) enum Verdict {
     },
     /// Allow, and keep a rule allowing calls like it in this project.
     AllowHere,
+    /// Deny, and keep a rule denying calls like it in this project, with
+    /// the reason given.
+    DenyHere(String),
     /// With the reason the user gave, empty when they gave none.
     Deny(String),
     /// The reply to an `ask_user` question.
@@ -3921,6 +3924,24 @@ impl Chat {
                 self.execute_call(call, true, false, None, cx);
             }
             Verdict::Keep(place) => self.execute_call(call, true, false, Some(place), cx),
+            Verdict::DenyHere(reason) => {
+                // The allow rule's shape, turned round: calls like this one
+                // are refused in this project from now on, without asking.
+                let file = letronna_core::permissions::user_file();
+                let kept = offer.map(|rule| {
+                    letronna_core::permissions::keep(
+                        &file,
+                        letronna_core::permissions::Rule {
+                            effect: letronna_core::permissions::Effect::Deny,
+                            ..rule
+                        },
+                    )
+                });
+                if let Some(Err(error)) = kept {
+                    self.error = Some(error);
+                }
+                self.record_result(Err(letronna_core::tools::declined(&reason)), cx)
+            }
             Verdict::AllowHere => {
                 // Into the user's own rules, held to this project: the
                 // project's file may not allow anything.

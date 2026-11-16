@@ -330,7 +330,9 @@ impl Chat {
                 .into_any_element();
         }
         let Some(result) = step.result.as_deref() else {
-            let words = if step.running {
+            let words = if step.running && self.asking.is_some() {
+                "Waiting for you to allow it, in the chat."
+            } else if step.running {
                 "Running…"
             } else {
                 "Waiting to run."
@@ -359,13 +361,13 @@ impl Chat {
                         .child(format!("⋯ {skip} lines above")),
                 )
             })
-            .children(lines.into_iter().map(|line| {
-                div()
-                    .text_color(color)
-                    .whitespace_nowrap()
-                    .overflow_hidden()
-                    .child(line.to_owned())
-            }))
+            // Wrapped, so a long error is read whole rather than cut at
+            // the panel's edge.
+            .children(
+                lines
+                    .into_iter()
+                    .map(|line| div().text_color(color).child(line.to_owned())),
+            )
             .when(result.trim().is_empty(), |this| {
                 this.child(div().text_color(muted).child("No output."))
             })

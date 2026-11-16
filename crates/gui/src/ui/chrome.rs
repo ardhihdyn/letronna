@@ -2,6 +2,8 @@ use crate::prelude::*;
 use gpui_component::popover::Popover;
 use std::path::PathBuf;
 
+/// The title bar's height; main.rs centres the traffic lights in it.
+pub(crate) const BAR_HEIGHT: Pixels = px(46.);
 /// The user guide on the website, opened from the account menu.
 const GUIDE: &str = "https://letronna.ai/docs";
 /// The window width from which the palette's button says what it does:
@@ -27,11 +29,15 @@ impl Chat {
         // that the other platforms have at the edge. Fullscreen hides the lights
         // and the bar adds that 12px by itself.
         let inset = if window.is_fullscreen() {
-            px(0.)
+            px(4.)
         } else {
-            px(76.)
+            px(80.)
         };
         TitleBar::new()
+            // Taller than gpui-component's, with room around what it holds,
+            // as a modern Mac app's bar; the traffic lights sit in its middle.
+            .h(BAR_HEIGHT)
+            .pr_3()
             .when(cfg!(target_os = "macos"), |bar| bar.pl(inset))
             .child(
                 h_flex()
@@ -92,9 +98,9 @@ impl Chat {
             )
     }
 
-    /// The bar's middle: the open session's title, and the model that
-    /// answers there, in a narrow line under it. Drawn over the bar, so it
-    /// stays in the window's middle whatever the two sides hold.
+    /// The bar's middle: the open session's title, on one line; the model
+    /// is the composer's to show. Drawn over the bar, so it stays in the
+    /// window's middle whatever the two sides hold.
     fn bar_title(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let active = self.store.active;
         let title = self.store.conversations[active].title.trim();
@@ -103,7 +109,6 @@ impl Chat {
         } else {
             title.to_owned().into()
         };
-        let model: SharedString = self.store.model(active).1.to_owned().into();
         div()
             .absolute()
             .inset_0()
@@ -111,24 +116,13 @@ impl Chat {
             .items_center()
             .justify_center()
             .child(
-                v_flex()
-                    .max_w(px(360.))
-                    .items_center()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::MEDIUM)
-                            .truncate()
-                            .child(title),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .line_height(px(14.))
-                            .text_color(cx.theme().muted_foreground)
-                            .truncate()
-                            .child(model),
-                    ),
+                div()
+                    .max_w(px(420.))
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(cx.theme().foreground)
+                    .truncate()
+                    .child(title),
             )
     }
 

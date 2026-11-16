@@ -980,6 +980,11 @@ impl Chat {
                     this.refresh_changes(cx);
                     this.check_upgrade(cx);
                 }
+                // A toast waits while the window is behind another; drawn
+                // again, it starts counting as it comes to the front.
+                if this.toast.is_some() {
+                    cx.notify();
+                }
             }),
             cx.subscribe_in(&steer, window, |this, _, event, window, cx| {
                 if matches!(event, InputEvent::PressEnter { .. }) {
@@ -5211,7 +5216,7 @@ impl Render for Chat {
             .when(self.page != Page::Chat, |this| {
                 this.children(self.ring(crate::ui::keys::Region::Transcript, cx))
             })
-            .children(self.toast_layer(cx));
+            .children(self.toast_layer(window, cx));
 
         let sidebar = self.sidebar_frame(window, cx);
         v_flex()

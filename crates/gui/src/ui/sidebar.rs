@@ -4,10 +4,16 @@ use crate::prelude::*;
 /// The sidebar's width, its border included, which the chat column is
 /// sized from.
 pub(crate) const SIDEBAR_WIDTH: Pixels = px(250.);
+/// The rail the sidebar folds to: a column of icons, so New session, search
+/// and the pages stay a click away.
+pub(crate) const RAIL_WIDTH: Pixels = px(52.);
+/// How long the sidebar takes to open out of the rail or fold into it.
+const FOLD: std::time::Duration = std::time::Duration::from_millis(240);
 
 /// The sidebar's pages after New session, in the order it lists them, every
 /// one a row of its own; Workflows only while there is a run to show.
-const PAGES: [Page; 8] = [
+const PAGES: [Page; 9] = [
+    Page::Tasks,
     Page::Capabilities,
     Page::Activity,
     Page::Plugins,
@@ -47,6 +53,8 @@ fn page_icon(page: Page) -> AppIcon {
         Page::Activity => AppIcon::Robot,
         Page::Workflows => AppIcon::Workflow,
         Page::Wallet => AppIcon::Wallet,
+        Page::Tasks => AppIcon::Checklist,
+        Page::Import => AppIcon::PopIn,
     }
 }
 
@@ -82,31 +90,54 @@ impl Chat {
         };
         let up = at.checked_sub(1).and_then(|up| handles.get(up)).cloned();
         let down = handles.get(at + 1).cloned();
-        h_flex()
+        let row = h_flex()
             .id(("nav", nav.slot()))
             .track_focus(&handles[at])
-            .h(px(26.))
-            .px_2()
-            .gap_2()
             .items_center()
-            .rounded(theme.radius)
             // Always there, so the ring the keys bring moves nothing.
             .border_1()
             .border_color(theme.transparent)
             .cursor_pointer()
-            .font_family(HEADING_FONT)
-            .font_weight(FontWeight::MEDIUM)
             .text_color(theme.sidebar_foreground)
-            .when(active, |this| this.bg(accent))
-            .focus(|s| s.border_color(ring))
-            .active(|s| s.bg(accent.opacity(0.6)))
-            .child(icon.size_4().text_color(muted))
-            .child(div().flex_1().min_w_0().truncate().child(label))
-            .when(nav == Nav::New, |this| {
-                this.children(
-                    crate::ui::keys::bound_key(&NewSession, cx).map(|key| Kbd::new(key).text_xs()),
-                )
-            })
+            .focus(|s| s.border_color(ring));
+        let row = match nav {
+            // The drawer's one big button, as the phone's New chat: a filled
+            // pill across the top.
+            Nav::New => row
+                .h(px(32.))
+                .px_2()
+                .gap_2p5()
+                .rounded(theme.radius)
+                .font_weight(FontWeight::MEDIUM)
+                .hover(move |s| s.bg(accent.opacity(0.6)))
+                .active(move |s| s.bg(accent))
+                .child(icon.size_4().text_color(theme.link))
+                .child(div().flex_1().min_w_0().truncate().child(label))
+                .children(
+                    crate::ui::keys::bound_key(&NewSession, cx)
+                        .map(|key| Kbd::new(key).text_xs().opacity(0.6)),
+                ),
+            // A page is an icon in the dock at the drawer's foot, named
+            // under the pointer; the sessions have the room.
+            Nav::Page(_) => row
+                .size(px(28.))
+                .justify_center()
+                .rounded(theme.radius)
+                .when(active, |this| this.bg(accent))
+                .when(!active, |this| {
+                    this.hover(move |s| s.bg(accent.opacity(0.6)))
+                })
+                .active(|s| s.bg(accent.opacity(0.8)))
+                .tooltip(move |window, cx| {
+                    gpui_component::tooltip::Tooltip::new(label).build(window, cx)
+                })
+                .child(icon.size_4().text_color(if active {
+                    theme.sidebar_foreground
+                } else {
+                    muted
+                })),
+        };
+        row
             // As on a session row, a press leaves the keys where they were;
             // Tab or Up and Down are what put them here.
             .on_any_mouse_down(|_, window, _| window.prevent_default())
@@ -129,6 +160,157 @@ impl Chat {
             ))
     }
 
+    /// Open the sidebar out of its rail, or fold it back into it.
+    pub(crate) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
+        self.sidebar_open = !self.sidebar_open;
+        self.sidebar_moved = Some(cx.background_executor().now());
+        cx.notify();
+    }
+
+    /// How much of the window the sidebar takes once it has settled.
+    pub(crate) fn sidebar_room(&self) -> Pixels {
+        if self.sidebar_open {
+            SIDEBAR_WIDTH
+        } else {
+            RAIL_WIDTH
+        }
+    }
+
+    /// The sidebar as it stands: the whole of it, the rail, or, while it
+    /// opens or folds, the whole of it in a box whose width eases between
+    /// the two.
+    pub(crate) fn sidebar_frame(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let t = match self.sidebar_moved {
+            Some(since) => crate::ui::motion::progress(since, FOLD, window, cx),
+            None => 1.,
+        };
+        if t >= 1. {
+            self.sidebar_moved = None;
+            self.sidebar_drawn = self.sidebar_room();
+            return if self.sidebar_open {
+                self.sidebar(window, cx).into_any_element()
+            } else {
+                self.rail(cx).into_any_element()
+            };
+        }
+        let (from, to) = if self.sidebar_open {
+            (RAIL_WIDTH, SIDEBAR_WIDTH)
+        } else {
+            (SIDEBAR_WIDTH, RAIL_WIDTH)
+        };
+        self.sidebar_drawn = from + (to - from) * t;
+        div()
+            .h_full()
+            .flex_shrink_0()
+            .overflow_hidden()
+            .bg(cx.theme().sidebar)
+            .w(self.sidebar_drawn)
+            .child(self.sidebar(window, cx))
+            .into_any_element()
+    }
+
+    /// The sidebar folded: New session, search and every page as an icon
+    /// each, named under the pointer.
+    fn rail(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let session = self.store.conversations[self.store.active].id;
+        let workflows =
+            self.page == Page::Workflows || !letronna_core::workflow::runs(session).is_empty();
+        let theme = cx.theme();
+        let (accent, muted, link) = (theme.sidebar_accent, theme.muted_foreground, theme.link);
+        let radius = theme.radius;
+        let button = |id: usize, icon: AppIcon, tip: &'static str, on: bool, tint| {
+            div()
+                .id(("rail", id))
+                .size(px(34.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(radius)
+                .cursor_pointer()
+                .when(on, |this| this.bg(accent))
+                .hover(move |s| s.bg(accent.opacity(0.6)))
+                .tooltip(move |window, cx| {
+                    gpui_component::tooltip::Tooltip::new(tip).build(window, cx)
+                })
+                .child(Icon::new(icon).size_4().text_color(tint))
+        };
+        let rail = v_flex()
+            .id("sidebar-rail")
+            .w(RAIL_WIDTH)
+            .h_full()
+            .flex_shrink_0()
+            .items_center()
+            .gap_1()
+            .pt_2()
+            .pb_2()
+            .bg(theme.sidebar)
+            .border_r(px(3.))
+            .border_color(theme.sidebar_border)
+            .child(
+                button(0, AppIcon::SquarePen, "New session", false, link)
+                    .on_click(cx.listener(|this, _, window, cx| this.new_chat(window, cx))),
+            )
+            .child(
+                button(1, AppIcon::Search, "Search sessions", false, muted).on_click(cx.listener(
+                    |this, _, window, cx| {
+                        this.toggle_sidebar(cx);
+                        this.search
+                            .update(cx, |search, cx| search.focus(window, cx));
+                    },
+                )),
+            )
+            .child(div().flex_1());
+        let mut rail = rail;
+        for page in PAGES
+            .into_iter()
+            .filter(|&page| page != Page::Workflows || workflows)
+        {
+            let on = page == self.page;
+            rail = rail.child(
+                button(2 + page as usize, page_icon(page), page.title(), on, muted).on_click(
+                    cx.listener(move |this, _, window, cx| this.open_page(page, window, cx)),
+                ),
+            );
+        }
+        rail.child(self.settings_button(cx))
+    }
+
+    /// Settings, at the end of the pages wherever the sidebar is: a gear
+    /// that is always in sight, with its key in the tooltip.
+    fn settings_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let accent = theme.sidebar_accent;
+        div()
+            .id("sidebar-settings")
+            .size(px(28.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(theme.radius)
+            .cursor_pointer()
+            .when(self.settings_open, |this| this.bg(accent))
+            .hover(move |s| s.bg(accent.opacity(0.6)))
+            .tooltip(|window, cx| {
+                gpui_component::tooltip::Tooltip::new("Settings")
+                    .action(&OpenSettings, None)
+                    .build(window, cx)
+            })
+            .child(
+                Icon::new(IconName::Settings)
+                    .size_4()
+                    .text_color(theme.muted_foreground),
+            )
+            .on_click(cx.listener(|this, _, window, cx| {
+                if !this.settings_open {
+                    this.open_settings(window, cx)
+                }
+            }))
+    }
+
     /// Go to `page` as its sidebar row does, reading afresh what it lists.
     pub(crate) fn open_page(&mut self, page: Page, window: &mut Window, cx: &mut Context<Self>) {
         match page {
@@ -140,7 +322,8 @@ impl Chat {
             Page::Artifacts => self.read_artifacts(cx),
             Page::Wallet => self.read_wallet(true, cx),
             Page::Plugins => self.reload_plugins(),
-            Page::Chat | Page::Messaging => {}
+            Page::Import => return self.open_import_page(window, cx),
+            Page::Chat | Page::Messaging | Page::Tasks => {}
         }
         self.page = page;
         self.focus_composer(window, cx);
@@ -242,8 +425,38 @@ impl Chat {
             .rounded(cx.theme().radius)
             .cursor_pointer()
             .text_sm()
-            .when(active || selected, |this| {
-                this.bg(cx.theme().sidebar_accent)
+            .when(selected, |this| this.bg(cx.theme().sidebar_accent))
+            // The session on screen: its fill sweeps in from the left, with
+            // a blue bar standing up at its edge, each time it is picked.
+            .when(active, |this| {
+                let (shade, bar) = (cx.theme().sidebar_accent, cx.theme().link);
+                let highlight = div()
+                    .absolute()
+                    .top_0()
+                    .bottom_0()
+                    .left_0()
+                    .w_full()
+                    .rounded(cx.theme().radius)
+                    .bg(shade)
+                    .child(
+                        div()
+                            .absolute()
+                            .left_0()
+                            .top(px(6.))
+                            .bottom(px(6.))
+                            .w(px(3.))
+                            .rounded_full()
+                            .bg(bar),
+                    );
+                if cx.reduce_motion() {
+                    this.child(highlight)
+                } else {
+                    this.child(highlight.with_animation(
+                        ("session-pick", id as usize),
+                        crate::ui::motion::enter(std::time::Duration::from_millis(280)),
+                        |el, t| el.w(relative(0.3 + 0.7 * t)).opacity(t.min(1.)),
+                    ))
+                }
             })
             .active(|s| s.bg(cx.theme().sidebar_accent.opacity(0.6)))
             .when(selecting, |this| this.child(check_box(selected, cx)))
@@ -544,9 +757,14 @@ impl Chat {
                     .clone()
             })
             .collect();
-        let mut nav = v_flex().px_2().pt_2().gap_0p5();
+        let mut new = div().px_2().pt_2();
+        let mut dock = h_flex().justify_between().px_1p5().py_2();
         for (at, &row) in rows.iter().enumerate() {
-            nav = nav.child(self.nav_item(row, at, &handles, cx));
+            let item = self.nav_item(row, at, &handles, cx);
+            match row {
+                Nav::New => new = new.child(item),
+                Nav::Page(_) => dock = dock.child(item),
+            }
         }
         let visible = self.visible_sessions(cx);
         let keyed = self
@@ -713,26 +931,27 @@ impl Chat {
             .text_color(cx.theme().sidebar_foreground)
             .border_r(px(3.))
             .border_color(cx.theme().sidebar_border)
-            .child(nav)
+            .child(new)
             .child(
-                div().px_2().pt_3().child(
+                div().px_2().pt_0p5().pb_1().child(
                     Input::new(&self.search)
                         .xsmall()
-                        .h(px(28.))
+                        .h(px(32.))
                         .px_2()
+                        .rounded(cx.theme().radius)
                         .appearance(false)
                         .prefix(
                             Icon::new(AppIcon::Search)
-                                .size_3()
+                                .size_4()
+                                .mr_1()
                                 .text_color(cx.theme().muted_foreground),
-                        ),
+                        )
+                        .suffix(self.session_filter_button(cx)),
                 ),
             )
-            .child(div().pt_1().child(if self.selecting() {
-                self.selection_bar(cx).into_any_element()
-            } else {
-                self.session_filter_row(cx).into_any_element()
-            }))
+            .when(self.selecting(), |this| {
+                this.child(div().pt_1().child(self.selection_bar(cx)))
+            })
             .child(
                 v_flex()
                     .id("session-list")
@@ -747,12 +966,16 @@ impl Chat {
                         v_flex()
                             .flex_shrink_0()
                             .children(self.runs_section(cx))
-                            .child(self.section("Sessions", cx))
                             .child(sessions)
                             .children(self.message_hits(cx)),
                     ),
             )
-            .children(self.grain(&self.grains.sidebar))
+            .child(
+                div()
+                    .border_t_1()
+                    .border_color(cx.theme().sidebar_accent)
+                    .child(dock.child(self.settings_button(cx))),
+            )
             .children(self.ring(crate::ui::keys::Region::Sidebar, cx))
             .children(self.open_session_menu_layer())
     }
@@ -840,6 +1063,7 @@ mod tests {
     fn every_page_has_a_row_with_workflows_only_while_runs_show() {
         let mut all = vec![
             "New session",
+            "Tasks",
             "Capabilities",
             "Activity",
             "Plugins",

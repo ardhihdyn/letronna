@@ -107,6 +107,7 @@ pub mod schedule;
 #[cfg(feature = "workflows")]
 mod script;
 pub mod search;
+pub mod share;
 mod side;
 pub mod skills;
 pub mod slash;

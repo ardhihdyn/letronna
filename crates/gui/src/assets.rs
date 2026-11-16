@@ -41,6 +41,7 @@ impl AssetSource for Assets {
                 "inbox",
                 "send",
                 "sparkles",
+                "mark",
                 "message-square",
                 "file",
                 "file-text",
@@ -107,6 +108,9 @@ impl AssetSource for Assets {
 pub(crate) enum AppIcon {
     Mic,
     Sparkles,
+    /// Letronna's star and crescent, the phone's mark.
+    Mark,
+    ListFilter,
     MessageSquare,
     File,
     FileText,
@@ -159,6 +163,8 @@ impl IconNamed for AppIcon {
         match self {
             AppIcon::Mic => "icons/mic.svg",
             AppIcon::Sparkles => "icons/sparkles.svg",
+            AppIcon::Mark => "icons/mark.svg",
+            AppIcon::ListFilter => "icons/list-filter.svg",
             AppIcon::MessageSquare => "icons/message-square.svg",
             AppIcon::File => "icons/file.svg",
             AppIcon::FileText => "icons/file-text.svg",

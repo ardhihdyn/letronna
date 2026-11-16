@@ -163,7 +163,11 @@ fn discord_hears(words: &[String]) -> Result<Hears, String> {
             "--role" => hears.roles.push(value("--role")?),
             "--admins" => hears.admins = true,
             "--tier" => hears.tier = value("--tier")?,
-            other => return Err(format!("Unknown option {other}. See letronna cloud --help.")),
+            other => {
+                return Err(format!(
+                    "Unknown option {other}. See letronna cloud --help."
+                ));
+            }
         }
     }
     if !discord_id(&hears.server) {
@@ -392,14 +396,32 @@ mod tests {
                 tier: String::new(),
             })
         );
-        let two = discord_hears(&words(&["--role", role, "--tier", "normal", "--role", "123456789012345678", "--server", server])).unwrap();
-        assert_eq!((two.roles.len(), two.admins, two.tier.as_str()), (2, false, "normal"));
+        let two = discord_hears(&words(&[
+            "--role",
+            role,
+            "--tier",
+            "normal",
+            "--role",
+            "123456789012345678",
+            "--server",
+            server,
+        ]))
+        .unwrap();
+        assert_eq!(
+            (two.roles.len(), two.admins, two.tier.as_str()),
+            (2, false, "normal")
+        );
         let refused = |all: &[&str]| discord_hears(&words(all)).unwrap_err();
         assert!(refused(&["--admins"]).contains("Say which server"));
         assert!(refused(&["--server", "my-server", "--admins"]).contains("Say which server"));
         assert!(refused(&["--server", server]).contains("Say who the bot hears"));
-        assert!(refused(&["--server", server, "--role", "mods"]).contains("mods is not a role's ID"));
-        assert!(refused(&["--server", server, "--admins", "--tier", "heavy"]).contains("light or normal"));
+        assert!(
+            refused(&["--server", server, "--role", "mods"]).contains("mods is not a role's ID")
+        );
+        assert!(
+            refused(&["--server", server, "--admins", "--tier", "heavy"])
+                .contains("light or normal")
+        );
         assert!(refused(&["--server"]).contains("--server needs a value"));
         assert!(refused(&["--server", server, "--everyone"]).contains("Unknown option --everyone"));
     }
@@ -417,7 +439,12 @@ mod tests {
             discord_line(&bot),
             "helper in The Server: connected. It hears members with the role you named and the server's owner and Administrators. 3 asked today. Thread th_1."
         );
-        let failed = DiscordBot { state: "failed".into(), failure: "Discord refused the bot's token.".into(), admins: false, ..bot };
+        let failed = DiscordBot {
+            state: "failed".into(),
+            failure: "Discord refused the bot's token.".into(),
+            admins: false,
+            ..bot
+        };
         assert!(discord_line(&failed).ends_with("Thread th_1.\nDiscord refused the bot's token."));
     }
 

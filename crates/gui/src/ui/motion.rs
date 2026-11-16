@@ -113,6 +113,13 @@ fn fraction(since: Instant, now: Instant, duration: Duration) -> f32 {
     (gone / duration.as_secs_f32()).min(1.)
 }
 
+/// `t` carried a little past the end and back, for a thing that arrives
+/// with some life in it: the empty chat's mark. 0 at 0 and 1 at 1.
+pub(crate) fn overshoot(t: f32) -> f32 {
+    let c = 1.70158;
+    1. + (c + 1.) * (t - 1.).powi(3) + c * (t - 1.).powi(2)
+}
+
 /// `element`, relatively placed, rising from `RISE` below as it fades in,
 /// `t` of the way.
 pub(crate) fn rise<E: Styled>(element: E, t: f32) -> E {
@@ -178,11 +185,10 @@ fn switched(on: bool, held: Option<bool>, flag: bool) -> Switch {
     }
 }
 
-/// The pieces of the window that come in: the sidebar, the panel beside the
+/// The pieces of the window that come in: the panel beside the
 /// chat, the rows of the chat and what the user opens in them.
 #[derive(Default)]
 pub(crate) struct Moves {
-    pub(crate) sidebar: Entrance,
     pub(crate) panel: Entrance,
     pub(crate) rows: Arrivals,
     pub(crate) opened: Opened,

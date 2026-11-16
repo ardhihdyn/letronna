@@ -3,28 +3,44 @@ use gpui_component::highlighter::HighlightTheme;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-// A family the system cannot resolve drops every glyph to Helvetica without
-// warning, so each platform names fonts it actually ships. gpui turns
-// ".SystemUIFont" into the platform's own UI face, but on Linux it matches
-// other names literally and never expands fontconfig generics like
-// "monospace", so Linux names DejaVu Sans Mono, gpui-component's own default.
-#[cfg(target_os = "macos")]
-pub(crate) const HEADING_FONT: &str = ".SystemUIFont";
-#[cfg(target_os = "macos")]
-pub(crate) const BODY_FONT: &str = ".SystemUIFont";
-#[cfg(target_os = "macos")]
-pub(crate) const MONO_FONT: &str = "Menlo";
+// The phone app's faces, shipped in the binary (assets/fonts, under the SIL
+// Open Font License) and registered by `register_fonts` before the first
+// window, so every platform draws the same letters: Barlow for what is read,
+// DM Mono for code and the small capital labels, Bodoni Moda for the
+// wordmark and the few lines set large.
+pub(crate) const HEADING_FONT: &str = "Barlow";
+pub(crate) const BODY_FONT: &str = "Barlow";
+pub(crate) const MONO_FONT: &str = "DM Mono";
+pub(crate) const WORDMARK_FONT: &str = "Bodoni Moda";
 
-#[cfg(not(target_os = "macos"))]
-pub(crate) const HEADING_FONT: &str = "Segoe UI Variable Display";
-#[cfg(not(target_os = "macos"))]
-pub(crate) const BODY_FONT: &str = "Segoe UI Variable Text";
-#[cfg(windows)]
-pub(crate) const MONO_FONT: &str = "Cascadia Mono";
-#[cfg(not(any(windows, target_os = "macos")))]
-pub(crate) const MONO_FONT: &str = "DejaVu Sans Mono";
-
-pub(crate) const WORDMARK_FONT: &str = "Georgia";
+/// Hand the bundled faces to the text system. A face that fails to load
+/// leaves its text in the platform's fallback rather than stopping the app.
+pub(crate) fn register_fonts(cx: &mut App) {
+    let fonts: Vec<std::borrow::Cow<'static, [u8]>> = vec![
+        include_bytes!("../assets/fonts/Barlow_300Light.ttf")
+            .as_slice()
+            .into(),
+        include_bytes!("../assets/fonts/Barlow_400Regular.ttf")
+            .as_slice()
+            .into(),
+        include_bytes!("../assets/fonts/Barlow_500Medium.ttf")
+            .as_slice()
+            .into(),
+        include_bytes!("../assets/fonts/Barlow_600SemiBold.ttf")
+            .as_slice()
+            .into(),
+        include_bytes!("../assets/fonts/BodoniModa_600SemiBold.ttf")
+            .as_slice()
+            .into(),
+        include_bytes!("../assets/fonts/DMMono_400Regular.ttf")
+            .as_slice()
+            .into(),
+        include_bytes!("../assets/fonts/DMMono_500Medium.ttf")
+            .as_slice()
+            .into(),
+    ];
+    let _ = cx.text_system().add_fonts(fonts);
+}
 
 // letronna.ai's Night palette, Paper turned over: Paper lays a little blue
 // over its page for the frame, and Night frames a dark ink page in the
@@ -52,6 +68,12 @@ const SIDEBAR_TEXT: u32 = 0xced1e8;
 const SIDEBAR_ON: u32 = 0x1a2551;
 /// The brand's electric blue, for fills only: as text on night it reads at 2.8:1.
 const BLUE: u32 = 0x0040ff;
+/// Blue under the pointer, a shade lighter than the fill.
+const BLUE_HOVER: u32 = 0x1a55ff;
+/// Corners of controls: buttons, inputs, rows.
+pub(crate) const RADIUS: f32 = 10.;
+/// Corners of what holds them: cards, dialogs, menus, the composer.
+pub(crate) const RADIUS_LG: f32 = 16.;
 /// Pressed blue, the fill at 80% brightness.
 const BLUE_PRESSED: u32 = 0x0033cc;
 /// Text on a blue fill, the site's on-blue: 6.03:1 on blue.
@@ -132,6 +154,8 @@ struct Palette {
     danger_pressed: u32,
     on_danger: u32,
     green: u32,
+    /// Under the pointer: a row, a plain button.
+    hover: u32,
 }
 
 const NIGHT_PALETTE: Palette = Palette {
@@ -152,6 +176,7 @@ const NIGHT_PALETTE: Palette = Palette {
     danger_pressed: DANGER_PRESSED,
     on_danger: MIDNIGHT,
     green: GREEN,
+    hover: 0x1d2234,
 };
 
 const PAPER_PALETTE: Palette = Palette {
@@ -174,6 +199,51 @@ const PAPER_PALETTE: Palette = Palette {
     danger_pressed: CRIMSON_PRESSED,
     on_danger: PAPER,
     green: FOREST,
+    hover: 0xe6e8ee,
+};
+
+/// Ink, the phone's Night on true black, for an OLED screen.
+const INK_PALETTE: Palette = Palette {
+    mode: ThemeMode::Dark,
+    page: 0x000000,
+    text: 0xe6e8f0,
+    muted: 0x8a90a8,
+    raised: 0x0e1018,
+    code: 0x0e1018,
+    hairline: 0x22263a,
+    frame: 0x000000,
+    frame_text: 0xced1e8,
+    frame_on: 0x141b3d,
+    link: SIGNAL,
+    selected: 0x0b1433,
+    selection: 0.4,
+    danger: DANGER,
+    danger_pressed: DANGER_PRESSED,
+    on_danger: 0x000000,
+    green: GREEN,
+    hover: 0x161928,
+};
+
+/// Sand, the phone's Paper warmed: dark brown ink on a sand page.
+const SAND_PALETTE: Palette = Palette {
+    mode: ThemeMode::Light,
+    page: 0xf4efe6,
+    text: 0x2b2118,
+    muted: 0x6e5c49,
+    raised: 0xfbf8f2,
+    code: 0xeae3d6,
+    hairline: 0xd8cdbb,
+    frame: 0xe9e0d0,
+    frame_text: 0x2b2118,
+    frame_on: 0xdccfb8,
+    link: 0x1f4fd8,
+    selected: 0xe2d8c6,
+    selection: 0.22,
+    danger: CRIMSON,
+    danger_pressed: CRIMSON_PRESSED,
+    on_danger: 0xf4efe6,
+    green: FOREST,
+    hover: 0xe5dccc,
 };
 
 /// The palette a setting asks for: "paper", "system" to match the
@@ -185,6 +255,8 @@ fn palette_for(setting: &str, system: WindowAppearance) -> &'static Palette {
     );
     match setting {
         "paper" => &PAPER_PALETTE,
+        "sand" => &SAND_PALETTE,
+        "ink" => &INK_PALETTE,
         "system" if light => &PAPER_PALETTE,
         _ => &NIGHT_PALETTE,
     }
@@ -195,7 +267,7 @@ fn palette_for(setting: &str, system: WindowAppearance) -> &'static Palette {
 fn pinned_dark(setting: &str) -> Option<bool> {
     match setting {
         "system" => None,
-        "paper" => Some(false),
+        "paper" | "sand" => Some(false),
         _ => Some(true),
     }
 }
@@ -374,48 +446,42 @@ fn paint(t: &mut Theme, p: &Palette) {
     // paper does on crimson.
     t.danger_foreground = rgb(p.on_danger).into();
     t.green = rgb(p.green).into();
-    // A hover colour equal to its base draws no hover: list rows and blue
-    // and red buttons stay still under the pointer, and a scrollbar's thumb
-    // keeps its colour, though gpui-component still widens it and fills its
-    // track. Ghost and outline buttons work out their own hover, so Letronna
-    // draws its own as `plain` and `framed` (ui::NoHover); menu items and
-    // gpui-component's own ghost buttons still hover. On Windows and Linux
-    // the title bar's minimise and maximise hover to secondary_hover, a
-    // raised square on midnight behind a white glyph, and close hovers to
-    // danger.
-    t.primary_hover = t.primary;
-    t.secondary_hover = t.secondary;
-    t.list_hover = t.colors.list;
-    t.table_hover = t.table;
-    t.danger_hover = t.danger;
-    t.scrollbar_thumb_hover = t.scrollbar_thumb;
-    // Buttons have colours of their own, filled in from the theme file's
-    // when it loads, so these carry the ones above over to them: blue, red
-    // and raised buttons as they are, and one with no variant on the page
-    // inside the input's hairline (`framed`), none of them changing under
-    // the pointer.
+    // Everything you can press answers the pointer, as on the phone: a
+    // raised step for rows and plain buttons, the hairline's colour for
+    // raised buttons, and blue a shade lighter.
+    let hover: Hsla = rgb(p.hover).into();
+    t.primary_hover = rgb(BLUE_HOVER).into();
+    t.secondary_hover = hairline;
+    t.list_hover = hover;
+    t.table_hover = hover;
+    t.danger_hover = t.danger.opacity(0.9);
     t.button_primary = t.primary;
-    t.button_primary_hover = t.primary;
+    t.button_primary_hover = t.primary_hover;
     t.button_primary_active = t.primary_active;
     t.button_primary_foreground = t.primary_foreground;
     t.button_danger = t.danger;
-    t.button_danger_hover = t.danger;
+    t.button_danger_hover = t.danger_hover;
     t.button_danger_active = t.danger_active;
     t.button_danger_foreground = t.danger_foreground;
     t.button_secondary = t.secondary;
-    t.button_secondary_hover = t.secondary;
+    t.button_secondary_hover = t.secondary_hover;
     t.button_secondary_active = t.secondary_active;
     t.button_secondary_foreground = t.secondary_foreground;
     t.button = t.background;
-    t.button_hover = t.background;
+    t.button_hover = hover;
     t.button_active = t.secondary_active;
     t.button_foreground = t.secondary_foreground;
-    // Hairlines rather than shadows, and near-square corners, like the site.
-    t.shadow = false;
-    t.radius = px(2.);
-    t.radius_lg = px(4.);
+    // Round, as the phone draws it: soft corners on controls, rounder on
+    // cards and dialogs, and a shadow under what floats.
+    t.shadow = true;
+    t.radius = px(RADIUS);
+    t.radius_lg = px(RADIUS_LG);
     // Lower than gpui-component's, clear of settings' close button.
     t.notification.margins.top = crate::ui::settings::TOASTS_TOP;
+    // The phone's toast: centred under the bar, where the eye already is,
+    // rather than off in a corner.
+    t.notification.placement = gpui::Anchor::TopCenter;
+    t.notification.width = px(420.);
     t.font_family = BODY_FONT.into();
     t.mono_font_family = MONO_FONT.into();
 }
@@ -492,6 +558,38 @@ mod tests {
             let channel = c as f32 * opacity + g as f32 * (1. - opacity);
             mixed | ((channel.round() as u32) << shift)
         })
+    }
+
+    #[test]
+    fn every_ink_and_sand_text_colour_passes_aa_on_its_surface() {
+        for p in [&super::INK_PALETTE, &super::SAND_PALETTE] {
+            let pairs = [
+                ("text on the page", p.text, p.page),
+                ("muted on the page", p.muted, p.page),
+                ("text on raised", p.text, p.raised),
+                ("muted on raised", p.muted, p.raised),
+                ("text on a code block", p.text, p.code),
+                ("muted on a code block", p.muted, p.code),
+                ("text on a selected row", p.text, p.selected),
+                ("muted on a selected row", p.muted, p.selected),
+                ("link on the page", p.link, p.page),
+                ("link on raised", p.link, p.raised),
+                ("frame text on the frame", p.frame_text, p.frame),
+                ("muted on the frame", p.muted, p.frame),
+                ("frame text on its selected row", p.frame_text, p.frame_on),
+                ("danger on the page", p.danger, p.page),
+                ("on-danger on danger", p.on_danger, p.danger),
+                ("green on the page", p.green, p.page),
+            ];
+            for (what, text, surface) in pairs {
+                let ratio = contrast(text, surface);
+                assert!(
+                    ratio >= 4.5,
+                    "{what} reads at {ratio:.2}:1 on {:06x}, under 4.5:1",
+                    p.page
+                );
+            }
+        }
     }
 
     #[test]

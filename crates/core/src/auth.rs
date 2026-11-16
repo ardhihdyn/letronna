@@ -25,7 +25,7 @@ use crate::chat::{self as backend};
 
 /// The website the browser is sent to. `LETRONNA_WEB` points it elsewhere,
 /// such as `http://localhost:5173` while working on the site.
-const WEBSITE: &str = "https://letronna.ai";
+pub(crate) const WEBSITE: &str = "https://letronna.ai";
 
 /// Where the browser is sent. The callback port is added as a query, the way
 /// every local-callback sign-in does it.
@@ -446,7 +446,7 @@ pub fn use_team(id: Option<&str>) -> Result<Account, String> {
     refresh()
 }
 
-fn client(timeout: Duration) -> Result<reqwest::blocking::Client, String> {
+pub(crate) fn client(timeout: Duration) -> Result<reqwest::blocking::Client, String> {
     reqwest::blocking::Client::builder()
         .timeout(timeout)
         .build()

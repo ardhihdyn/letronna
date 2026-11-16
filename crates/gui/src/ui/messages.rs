@@ -263,14 +263,14 @@ impl Chat {
                         TextView::markdown(self.text_id("md-cut", index), cut.shown)
                             .selectable(selectable)
                             .text_size(px(15.))
-                            .font_weight(FontWeight::MEDIUM)
+                            .font_weight(FontWeight::NORMAL)
                             .line_height(leading),
                     )
                     .into_any_element(),
                 None => TextView::markdown(md, said)
                     .selectable(selectable)
                     .text_size(px(15.))
-                    .font_weight(FontWeight::MEDIUM)
+                    .font_weight(FontWeight::NORMAL)
                     .line_height(leading)
                     .into_any_element(),
             }
@@ -403,27 +403,6 @@ impl Chat {
             // Closer to its own text than the turn's rows are to each other,
             // so a label reads as the head of what follows it.
             .gap_1p5()
-            // Your prompt is a plain row under its own label, its buttons at
-            // the label's end; the line keeps their height so nothing moves
-            // when they show.
-            .when(is_user, |this| {
-                this.child(
-                    h_flex()
-                        .h_5()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_family(HEADING_FONT)
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(cx.theme().link)
-                                .child("You"),
-                        )
-                        .children(on_label),
-                )
-            })
             .when(labeled && !is_user, |this| {
                 this.child(
                     h_flex()
@@ -457,8 +436,39 @@ impl Chat {
             // column for some documents (lists after a wrapped paragraph),
             // which pushes the whole chat past the composer. Clipping here
             // clamps it; min_w_0 would instead collapse list layout.
+            // Your prompt sits in a bubble at the right, as on the phone;
+            // a reply reads across the column.
             .when(!tool_only, |this| {
-                this.child(div().w_full().overflow_hidden().pb_1().child(body))
+                if is_user && !editing {
+                    this.child(
+                        h_flex().w_full().justify_end().child(
+                            div()
+                                .max_w(relative(0.85))
+                                .overflow_hidden()
+                                .px_4()
+                                .py_2()
+                                .rounded(BUBBLE_RADIUS)
+                                .border_1()
+                                .border_color(cx.theme().border)
+                                .bg(cx.theme().secondary)
+                                .child(body),
+                        ),
+                    )
+                } else {
+                    this.child(div().w_full().overflow_hidden().pb_1().child(body))
+                }
+            })
+            // Its buttons on a line of their own under it, which keeps its
+            // height so nothing moves when they show.
+            .when(is_user, |this| {
+                this.child(
+                    h_flex()
+                        .h_5()
+                        .items_center()
+                        .justify_end()
+                        .gap_2()
+                        .children(on_label),
+                )
             })
             // A reply that said a few words and goes on to write a call: the
             // call is named under them while it streams.
@@ -1615,6 +1625,7 @@ impl Chat {
         });
         let theme = cx.theme();
         let (muted, plain, danger) = (theme.muted_foreground, theme.foreground, theme.danger);
+        let idle = running.is_none();
         let line: Vec<AnyElement> = match running {
             Some(call) => {
                 let summary = letronna_core::tools::summary(&call.name, &call.arguments);
@@ -1681,30 +1692,53 @@ impl Chat {
             .id(self.row_id("run", run.first))
             .track_focus(&focus)
             .key_context("ToolRun")
-            .h(px(26.))
+            // The phone's work card: a raised, rounded head for what the
+            // turn did, its steps opening under it.
+            .h(px(40.))
             // As a tool row's: its nowrap text must not widen the column.
             .min_w_0()
             .w_full()
-            .px_2()
-            .gap_1p5()
+            .px_3()
+            .gap_2()
             .items_center()
-            .rounded(theme.radius)
+            .rounded(theme.radius_lg)
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.secondary)
             .cursor_pointer()
-            .text_xs()
-            .font_family(HEADING_FONT)
+            .text_sm()
             .text_color(muted)
-            .focus(|s| s.bg(theme.secondary))
-            .active(|s| s.bg(theme.secondary.opacity(0.5)))
+            .hover(|s| s.bg(theme.list_hover))
+            .focus(|s| s.border_color(theme.ring))
+            .active(|s| s.bg(theme.secondary.opacity(0.6)))
+            .when(idle, |this| {
+                this.child(
+                    div()
+                        .size(px(24.))
+                        .flex_shrink_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(theme.radius)
+                        .bg(theme.primary.opacity(0.12))
+                        .child(
+                            Icon::new(AppIcon::Terminal)
+                                .size_3p5()
+                                .text_color(theme.link),
+                        ),
+                )
+            })
+            .children(line)
+            .child(div().flex_1())
+            .children(ended)
             .child(
                 Icon::new(if open {
                     IconName::ChevronDown
                 } else {
                     IconName::ChevronRight
                 })
-                .size_3(),
+                .size_4(),
             )
-            .children(line)
-            .children(ended)
             // As on a tool row, a press leaves the keys in the composer;
             // Tab is what picks the line out.
             .on_any_mouse_down(|_, window, _| window.prevent_default())
@@ -1872,6 +1906,7 @@ impl Chat {
 
     pub(crate) fn empty_state(
         &self,
+        composer: AnyElement,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -1890,19 +1925,35 @@ impl Chat {
             .items_center()
             .justify_center()
             .gap_2()
+            // The phone's opening: the mark grows in, then the greeting for
+            // the time of day rises under it, and the session's line after.
             .child(
-                div()
-                    .font_family(WORDMARK_FONT)
-                    .italic()
-                    .text_size(px(72.))
-                    .line_height(px(80.))
-                    .child(BRAND),
+                Icon::new(AppIcon::Mark)
+                    .size(px(44.))
+                    .text_color(cx.theme().primary)
+                    .with_animation(
+                        "empty-mark",
+                        crate::ui::motion::enter(MARK_IN),
+                        |icon, t| {
+                            let t = crate::ui::motion::overshoot(t);
+                            icon.size(px(28. + 16. * t)).opacity(t.min(1.))
+                        },
+                    ),
             )
             .child(
                 div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(self.greeting),
+                    .relative()
+                    .mt_2()
+                    .font_family(WORDMARK_FONT)
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_size(px(40.))
+                    .line_height(px(48.))
+                    .child(time_of_day(chrono::Timelike::hour(&chrono::Local::now())))
+                    .with_animation(
+                        "empty-hello",
+                        crate::ui::motion::enter(HELLO_IN),
+                        crate::ui::motion::rise,
+                    ),
             )
             .when(no_project, |this| {
                 this.child(
@@ -1917,6 +1968,21 @@ impl Chat {
                         ),
                 )
             })
+            // The composer itself, in the middle, then ways to start.
+            .child(
+                div()
+                    .w_full()
+                    .max_w(COLUMN)
+                    .mt_6()
+                    .relative()
+                    .child(composer)
+                    .with_animation(
+                        "empty-composer",
+                        crate::ui::motion::enter(LINE_IN + std::time::Duration::from_millis(80)),
+                        crate::ui::motion::rise,
+                    ),
+            )
+            .child(self.starters(cx))
             .children(self.continue_last(window, cx))
             // A side question asked before anything else still needs somewhere to show.
             .children(
@@ -1930,6 +1996,73 @@ impl Chat {
                 .overflow_y_scroll()
                 .child(page),
         )
+    }
+
+    /// Ways to start a session: a few rounded chips under the composer,
+    /// each putting its prompt in the composer to be finished and sent.
+    fn starters(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        const STARTERS: [(&str, AppIcon, &str); 4] = [
+            ("Fix a bug", AppIcon::Alert, "Find and fix the bug where "),
+            (
+                "Explain this project",
+                AppIcon::FileText,
+                "Explain how this project is laid out and how its parts fit together.",
+            ),
+            ("Write tests", AppIcon::Checklist, "Write tests for "),
+            (
+                "Review my changes",
+                AppIcon::Branch,
+                "Review the changes I have not committed yet and point out anything wrong.",
+            ),
+        ];
+        let theme = cx.theme();
+        let (border, muted, link, hover) = (
+            theme.border,
+            theme.muted_foreground,
+            theme.link,
+            theme.list_hover,
+        );
+        h_flex()
+            .relative()
+            .flex_wrap()
+            .justify_center()
+            .gap_2()
+            .mt_4()
+            .px_6()
+            .children(
+                STARTERS
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (label, icon, prompt))| {
+                        h_flex()
+                            .id(("starter", i))
+                            .h(px(32.))
+                            .px_3()
+                            .gap_1p5()
+                            .items_center()
+                            .rounded_full()
+                            .border_1()
+                            .border_color(border)
+                            .cursor_pointer()
+                            .text_sm()
+                            .text_color(muted)
+                            .hover(move |s| s.bg(hover).text_color(link))
+                            .child(Icon::new(icon).size_3p5().text_color(link))
+                            .child(label)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.composer.update(cx, |input, cx| {
+                                    input.set_value(prompt, window, cx);
+                                    input.focus(window, cx);
+                                });
+                                cx.notify();
+                            }))
+                    }),
+            )
+            .with_animation(
+                "empty-starters",
+                crate::ui::motion::enter(LINE_IN + std::time::Duration::from_millis(200)),
+                crate::ui::motion::rise,
+            )
     }
 
     /// One quiet line back to the last session, under a new session's
@@ -1993,9 +2126,10 @@ impl Chat {
             .gap_2()
             .child(
                 div()
-                    .text_xl()
-                    .font_family(HEADING_FONT)
+                    .font_family(WORDMARK_FONT)
                     .font_weight(FontWeight::SEMIBOLD)
+                    .text_size(px(30.))
+                    .line_height(px(38.))
                     .child(page.title()),
             )
             .child(
@@ -2216,7 +2350,7 @@ fn ends_thinking(event: &Event) -> bool {
 /// What a call to `tool` with `args` changes, when it is an edit: an
 /// edit_file's replacements compared line by line as the files card does,
 /// a written file's lines all added, a patch's own `+` and `-` lines.
-fn edited_by(tool: &str, args: &str) -> Option<Edited> {
+pub(crate) fn edited_by(tool: &str, args: &str) -> Option<Edited> {
     // Asked again at every frame of a call that is no edit, which is then
     // not worth parsing.
     if !matches!(tool, "edit_file" | "write_file" | "apply_patch") {
@@ -2684,3 +2818,37 @@ mod tests {
         assert_eq!(ran_for(ms(125_000)).as_deref(), Some("2m 5s"));
     }
 }
+
+/// How long the empty chat's mark takes to grow in.
+const MARK_IN: std::time::Duration = std::time::Duration::from_millis(520);
+/// The greeting under it, a beat behind.
+const HELLO_IN: std::time::Duration = std::time::Duration::from_millis(620);
+/// The session's line, last.
+const LINE_IN: std::time::Duration = std::time::Duration::from_millis(760);
+
+/// What the empty chat says, by the hour on this computer's clock.
+fn time_of_day(hour: u32) -> &'static str {
+    match hour {
+        5..=11 => "Good morning",
+        12..=17 => "Good afternoon",
+        18..=22 => "Good evening",
+        _ => "Up late",
+    }
+}
+
+#[cfg(test)]
+mod time_of_day_tests {
+    use super::time_of_day;
+
+    #[test]
+    fn each_hour_has_a_greeting_and_the_turns_fall_where_they_should() {
+        assert_eq!(time_of_day(4), "Up late");
+        assert_eq!(time_of_day(5), "Good morning");
+        assert_eq!(time_of_day(12), "Good afternoon");
+        assert_eq!(time_of_day(18), "Good evening");
+        assert_eq!(time_of_day(23), "Up late");
+    }
+}
+
+/// The corners of your message's bubble, the phone's.
+const BUBBLE_RADIUS: Pixels = px(20.);

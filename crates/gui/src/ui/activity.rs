@@ -856,9 +856,10 @@ impl Chat {
                     .gap_1()
                     .child(
                         div()
-                            .text_xl()
-                            .font_family(HEADING_FONT)
+                            .font_family(WORDMARK_FONT)
                             .font_weight(FontWeight::SEMIBOLD)
+                            .text_size(px(30.))
+                            .line_height(px(38.))
                             .child(Page::Activity.title()),
                     )
                     .child(
@@ -880,8 +881,10 @@ impl Chat {
             .w_full()
             .gap_2()
             .p_3()
-            .rounded(cx.theme().radius)
-            .bg(cx.theme().secondary.opacity(0.3))
+            .rounded(cx.theme().radius_lg)
+            .border_1()
+            .border_color(cx.theme().border)
+            .bg(cx.theme().secondary)
             .child(
                 h_flex()
                     .w_full()

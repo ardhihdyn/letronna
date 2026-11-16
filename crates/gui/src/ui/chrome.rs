@@ -2,6 +2,8 @@ use crate::prelude::*;
 use gpui_component::popover::Popover;
 use std::path::PathBuf;
 
+/// The title bar's height; main.rs centres the traffic lights in it.
+pub(crate) const BAR_HEIGHT: Pixels = px(46.);
 /// The user guide on the website, opened from the account menu.
 const GUIDE: &str = "https://letronna.ai/docs";
 /// The window width from which the palette's button says what it does:
@@ -26,81 +28,120 @@ impl Chat {
         // 20px apart from x=12 end at 64, so leave the same 12px gap after them
         // that the other platforms have at the edge. Fullscreen hides the lights
         // and the bar adds that 12px by itself.
-        let inset = if window.is_fullscreen() {
+        // Only macOS draws its window buttons at the bar's left; Windows and
+        // Linux have theirs at the right, drawn by the bar itself.
+        let inset = if !cfg!(target_os = "macos") {
             px(0.)
+        } else if window.is_fullscreen() {
+            px(4.)
         } else {
-            px(76.)
+            px(80.)
         };
+        // The sidebar's share of the bar, as wide as the sidebar is drawn
+        // now, even while it eases open or folds.
+        let side = self.sidebar_drawn;
+        let theme = cx.theme();
+        // Too narrow for the window buttons and the toggle -- the rail, or
+        // the sidebar on its way there -- the whole bar is the page's, and
+        // the rail starts under it.
+        let joined = side >= inset + px(36.) + px(3.) + px(52.);
+        // No bar across the window: the sidebar's colour runs up to the top
+        // under the window buttons and the toggle, and the chat's own header
+        // sits on the page beside it, with no line between them.
         TitleBar::new()
-            .when(cfg!(target_os = "macos"), |bar| bar.pl(inset))
+            .h(BAR_HEIGHT)
+            .bg(if joined {
+                theme.sidebar
+            } else {
+                theme.background
+            })
+            .border_b_0()
+            .pl(inset)
+            .child(
+                h_flex()
+                    .flex_shrink_0()
+                    .when(joined, |this| this.w(side - inset - px(3.)))
+                    .when(!joined, |this| this.pl_2())
+                    .justify_end()
+                    .pr_2()
+                    .child(no_drag(
+                        Button::new("toggle-sidebar")
+                            .plain(cx)
+                            .small()
+                            .icon(
+                                Icon::new(if self.sidebar_open {
+                                    IconName::PanelLeftClose
+                                } else {
+                                    IconName::PanelLeftOpen
+                                })
+                                .size_4()
+                                .text_color(theme.muted_foreground),
+                            )
+                            .tooltip_with_action("Toggle sidebar", &ToggleSidebar, None)
+                            .on_click(cx.listener(|this, _, _, cx| this.toggle_sidebar(cx))),
+                    )),
+            )
             .child(
                 h_flex()
                     .flex_1()
+                    .min_w_0()
+                    .h_full()
                     .items_center()
                     .gap_2()
-                    // Nothing follows the chip on macOS, so keep it off the edge.
-                    .when(cfg!(target_os = "macos"), |bar| bar.pr_3())
-                    .child(
-                        h_flex()
-                            .flex_1()
-                            .items_center()
-                            .gap_2()
-                            .child(no_drag(
-                                Button::new("toggle-sidebar")
-                                    .plain(cx)
-                                    .small()
-                                    .icon(
-                                        Icon::new(if self.sidebar_open {
-                                            IconName::PanelLeftClose
-                                        } else {
-                                            IconName::PanelLeftOpen
-                                        })
-                                        .size_4(),
-                                    )
-                                    .tooltip_with_action("Toggle sidebar", &ToggleSidebar, None)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.sidebar_open = !this.sidebar_open;
-                                        cx.notify();
-                                    })),
-                            ))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_family(HEADING_FONT)
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child("Letronna"),
+                    .pl_5()
+                    .pr_3()
+                    .bg(theme.background)
+                    .when(joined, |this| {
+                        this.border_l(px(3.)).border_color(theme.sidebar_border)
+                    })
+                    .child(self.bar_title(cx))
+                    .child(no_drag(self.command_button(window, cx)))
+                    .child(no_drag(
+                        Button::new("toggle-panel")
+                            .plain(cx)
+                            .small()
+                            .icon(
+                                Icon::new(IconName::PanelRight)
+                                    .size_4()
+                                    .text_color(cx.theme().muted_foreground),
+                            )
+                            .tooltip_with_action(
+                                "Toggle right panel",
+                                &crate::ui::panel::TogglePanel,
+                                Some("Chat"),
+                            )
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.toggle_panel(window, cx)),
                             ),
-                    )
-                    .child(
-                        h_flex()
-                            .flex_1()
-                            .items_center()
-                            .justify_end()
-                            .gap_2()
-                            .child(no_drag(self.command_button(window, cx)))
-                            .child(no_drag(
-                                Button::new("toggle-panel")
-                                    .plain(cx)
-                                    .small()
-                                    .icon(Icon::new(IconName::PanelRight).size_4())
-                                    .tooltip_with_action(
-                                        "Toggle right panel",
-                                        &crate::ui::panel::TogglePanel,
-                                        Some("Chat"),
-                                    )
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.toggle_panel(window, cx)
-                                    })),
-                            ))
-                            .children(self.profile_label.clone().map(|name| {
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(name)
-                            }))
-                            .child(no_drag(self.account_chip(cx))),
-                    ),
+                    ))
+                    .children(self.profile_label.clone().map(|name| {
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(name)
+                    }))
+                    .child(no_drag(self.account_chip(cx))),
             )
+    }
+
+    /// The chat header's title: the open session's, on one line at its
+    /// start; the model is the composer's to show.
+    fn bar_title(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let active = self.store.active;
+        let title = self.store.conversations[active].title.trim();
+        let title: SharedString = if title.is_empty() {
+            "New session".into()
+        } else {
+            title.to_owned().into()
+        };
+        div()
+            .flex_1()
+            .min_w_0()
+            .text_sm()
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(cx.theme().foreground)
+            .truncate()
+            .child(title)
     }
 
     /// A quiet field that opens the palette, so the palette, and the key

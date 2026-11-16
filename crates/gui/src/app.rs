@@ -88,6 +88,9 @@ pub(crate) enum Verdict {
     },
     /// Allow, and keep a rule allowing calls like it in this project.
     AllowHere,
+    /// Deny, and keep a rule denying calls like it in this project, with
+    /// the reason given.
+    DenyHere(String),
     /// With the reason the user gave, empty when they gave none.
     Deny(String),
     /// The reply to an `ask_user` question.
@@ -122,6 +125,8 @@ pub(crate) enum Page {
     Activity,
     Workflows,
     Wallet,
+    Tasks,
+    Import,
 }
 impl Page {
     pub(crate) fn title(self) -> &'static str {
@@ -135,6 +140,8 @@ impl Page {
             Page::Activity => "Activity",
             Page::Workflows => "Workflows",
             Page::Wallet => "Wallet",
+            Page::Tasks => "Tasks",
+            Page::Import => "Import",
         }
     }
     pub(crate) fn blurb(self) -> &'static str {
@@ -154,6 +161,8 @@ impl Page {
             Page::Workflows => "Runs of helpers Letronna started.",
             // Wallet renders its own page too.
             Page::Wallet => "The wallets Letronna pays from.",
+            Page::Tasks => "Each session's checklist, by project.",
+            Page::Import => "Sessions from Claude Code, Codex and other tools.",
         }
     }
 }
@@ -248,6 +257,18 @@ pub(crate) struct Chat {
     /// brought it back. Any other session shows its own conversation.
     pub(crate) show_setup: Option<u64>,
     pub(crate) sidebar_open: bool,
+    /// When the sidebar last began to open or fold; see `ui::sidebar`.
+    pub(crate) sidebar_moved: Option<std::time::Instant>,
+    /// How wide the sidebar was last drawn, which the title bar matches.
+    pub(crate) sidebar_drawn: Pixels,
+    /// The step picked in the Work tab; None follows the newest.
+    pub(crate) work_pick: Option<usize>,
+    /// The Work tab has opened for the turn under way.
+    pub(crate) work_seen: bool,
+    /// The checkpoint whose Restore was pressed once, by its turn's first message.
+    pub(crate) checkpoint_asking: Option<usize>,
+    /// The Import page's scan and what it found.
+    pub(crate) imports: crate::ui::import_page::ImportState,
     /// The sidebar, the panel and the chat's rows coming in.
     pub(crate) motion: crate::ui::motion::Moves,
     pub(crate) greeting: &'static str,
@@ -582,6 +603,8 @@ pub(crate) struct Chat {
     /// long as the window is open; see `ui::added`.
     pub(crate) added: std::collections::HashMap<u64, Vec<PathBuf>>,
     pub(crate) error: Option<String>,
+    /// The toast over the chat; see `ui::toast`.
+    pub(crate) toast: Option<crate::ui::toast::Toast>,
     /// Where updating stands, for the About page and the status bar.
     pub(crate) updating: crate::ui::update::Updating,
     /// A passing note for the next time the window draws: a new version, or
@@ -976,6 +999,11 @@ impl Chat {
                     this.refresh_changes(cx);
                     this.check_upgrade(cx);
                 }
+                // A toast waits while the window is behind another; drawn
+                // again, it starts counting as it comes to the front.
+                if this.toast.is_some() {
+                    cx.notify();
+                }
             }),
             cx.subscribe_in(&steer, window, |this, _, event, window, cx| {
                 if matches!(event, InputEvent::PressEnter { .. }) {
@@ -1008,7 +1036,11 @@ impl Chat {
             !store.settings.custom_endpoint.trim().is_empty()
                 || !letronna_core::gateway::own().is_empty()
                 // A model downloaded to this computer answers with nothing set up.
-                || !letronna_core::on_device::shelf::ready_ids().is_empty(),
+                || !letronna_core::on_device::shelf::ready_ids().is_empty()
+                // A plan signed in to in the browser answers too.
+                || letronna_core::providers::all()
+                    .iter()
+                    .any(|p| letronna_core::providers::auth::signed_in(p.info().name)),
             active.messages.is_empty(),
         )
         .then_some(active.id);
@@ -1016,6 +1048,12 @@ impl Chat {
             page: Page::Chat,
             show_setup,
             sidebar_open: true,
+            sidebar_moved: None,
+            sidebar_drawn: crate::ui::sidebar::SIDEBAR_WIDTH,
+            work_pick: None,
+            work_seen: false,
+            checkpoint_asking: None,
+            imports: Default::default(),
             motion: Default::default(),
             greeting,
             account,
@@ -1218,6 +1256,7 @@ impl Chat {
                 .or(skills_error)
                 .or_else(letronna_core::vault::trouble),
             updating: Default::default(),
+            toast: None,
             note: None,
             hook_note: None,
             plugin_ui: Default::default(),
@@ -1359,6 +1398,15 @@ impl Chat {
                     this.loading_models = false;
                     this.models = models;
                     this.media_models = media;
+                    // Nothing picked yet, as when the first way in was a
+                    // plan or a key: the newest model listed starts, so the
+                    // first message is not refused for want of one.
+                    if this.store.settings.model.trim().is_empty()
+                        && let Some((gateway, id)) = this.models.first().cloned()
+                    {
+                        this.store.choose_model(this.store.active, &gateway, &id);
+                        this.save();
+                    }
                     // One gateway failing still leaves the others usable.
                     this.gateway_error = (!errors.is_empty()).then(|| errors.join(" · "));
                     if this.models.is_empty() {
@@ -1814,12 +1862,16 @@ impl Chat {
             .update(cx, |input, cx| input.set_value("", window, cx));
         // Setting the box raises no change, so the chip is put right here.
         self.crew_reset(cx);
+        let typed = prompt.clone();
         let sent = if elsewhere {
             self.send_beside(prompt, images, cx)
         } else {
             self.dispatch(prompt, images, None, cx)
         };
         if sent.is_err() {
+            // Not sent, so not lost: the box keeps it to send again.
+            self.composer
+                .update(cx, |input, cx| input.set_value(typed, window, cx));
             self.not_sent(window, cx);
         } else {
             self.attachments.remove(&session);
@@ -3338,6 +3390,12 @@ impl Chat {
         self.asking = asking;
         if let agent::Next::AskUser(call) | agent::Next::Run(call) = &next {
             self.show_browser(&call.name, cx);
+            // The first call of a turn opens the work beside the chat.
+            if !self.work_seen {
+                self.panel.want_work = true;
+                self.work_pick = None;
+            }
+            self.work_seen = true;
         }
         match next {
             agent::Next::Done => self.finish(cx),
@@ -3892,6 +3950,24 @@ impl Chat {
                 self.execute_call(call, true, false, None, cx);
             }
             Verdict::Keep(place) => self.execute_call(call, true, false, Some(place), cx),
+            Verdict::DenyHere(reason) => {
+                // The allow rule's shape, turned round: calls like this one
+                // are refused in this project from now on, without asking.
+                let file = letronna_core::permissions::user_file();
+                let kept = offer.map(|rule| {
+                    letronna_core::permissions::keep(
+                        &file,
+                        letronna_core::permissions::Rule {
+                            effect: letronna_core::permissions::Effect::Deny,
+                            ..rule
+                        },
+                    )
+                });
+                if let Some(Err(error)) = kept {
+                    self.error = Some(error);
+                }
+                self.record_result(Err(letronna_core::tools::declined(&reason)), cx)
+            }
             Verdict::AllowHere => {
                 // Into the user's own rules, held to this project: the
                 // project's file may not allow anything.
@@ -4525,6 +4601,7 @@ impl Chat {
     }
 
     fn finish(&mut self, cx: &mut Context<Self>) {
+        self.work_seen = false;
         let stopped = std::mem::take(&mut self.stopping);
         let session = self.streaming_id;
         let connection = self.turn.as_ref().map(|turn| turn.connection.clone());
@@ -5022,57 +5099,17 @@ impl Render for Chat {
         // turn runs or one works.
         self.watch_helpers(cx);
         if let Some(note) = self.note.take() {
-            window.push_notification(gpui_component::notification::Notification::info(note), cx);
+            self.toast(note, crate::ui::toast::Kind::Info, cx);
         }
         if let Some(note) = self.loop_note.take() {
-            window.push_notification(gpui_component::notification::Notification::info(note), cx);
+            self.toast(note, crate::ui::toast::Kind::Info, cx);
         }
         if let Some(note) = self.hook_note.take() {
-            window.push_notification(
-                gpui_component::notification::Notification::warning(note),
-                cx,
-            );
+            self.toast(note, crate::ui::toast::Kind::Warning, cx);
         }
         self.plugin_toasts(window, cx);
         if let Some(error) = self.error.take() {
-            let text = error.clone();
-            window.push_notification(
-                gpui_component::notification::Notification::error(error)
-                    .autohide(false)
-                    .action(move |_, window, cx| {
-                        let text = text.clone();
-                        let copied = window.use_keyed_state("copied-error", cx, |_, _| false);
-                        let done = *copied.read(cx);
-                        Button::new("copy-error")
-                            .plain(cx)
-                            .xsmall()
-                            .icon(Icon::new(if done {
-                                IconName::Check
-                            } else {
-                                IconName::Copy
-                            }))
-                            .tooltip("Copy message")
-                            .on_click(move |_, _, cx| {
-                                cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
-                                copied.update(cx, |c, cx| {
-                                    *c = true;
-                                    cx.notify();
-                                });
-                                let copied = copied.clone();
-                                cx.spawn(async move |cx| {
-                                    cx.background_executor()
-                                        .timer(std::time::Duration::from_secs(2))
-                                        .await;
-                                    copied.update(cx, |c, cx| {
-                                        *c = false;
-                                        cx.notify();
-                                    });
-                                })
-                                .detach();
-                            })
-                    }),
-                cx,
-            );
+            self.toast(error, crate::ui::toast::Kind::Error, cx);
         }
         let active = self.store.active;
         let conversation = &self.store.conversations[active];
@@ -5082,11 +5119,7 @@ impl Render for Chat {
         // it cannot push back on a definite one. Worked out here, not by
         // measuring the pane, so a resize does not lag a frame behind.
         let pane = window.viewport_size().width
-            - if self.sidebar_open {
-                crate::ui::sidebar::SIDEBAR_WIDTH
-            } else {
-                px(0.)
-            }
+            - self.sidebar_room()
             // Beside the docked panel, less again.
             - self.panel_width(window, cx);
         let column = pane.min(COLUMN).max(px(0.));
@@ -5104,6 +5137,10 @@ impl Render for Chat {
             self.workflows_page(window, cx).into_any_element()
         } else if self.page == Page::Artifacts {
             self.artifacts_page(cx).into_any_element()
+        } else if self.page == Page::Import {
+            self.import_page(cx).into_any_element()
+        } else if self.page == Page::Tasks {
+            self.tasks_page(cx).into_any_element()
         } else if self.page == Page::Wallet {
             self.wallet_page(cx).into_any_element()
         } else if self.page == Page::Capabilities {
@@ -5129,8 +5166,9 @@ impl Render for Chat {
                 // than the greeting of a new session.
                 div().flex_1().into_any_element()
             } else {
+                // Drawn below, once the composer it centres is built.
                 empty_chat = true;
-                self.empty_state(window, cx).into_any_element()
+                div().into_any_element()
             }
         } else {
             // A menu a turn opened takes the focus from inside that turn. That
@@ -5207,6 +5245,28 @@ impl Render for Chat {
         let strip = (self.page == Page::Chat)
             .then(|| self.running_strip(window, cx))
             .flatten();
+        let dock = v_flex()
+            .w(column)
+            .mx_auto()
+            .px_6()
+            .pb_2()
+            .children(self.busy_note(cx))
+            .children(self.goal_line(cx))
+            .children(strip)
+            .children(self.crew_chip(cx))
+            .child(self.composer(pane < px(600.), cx));
+        // A new session opens on the composer in the middle, under the
+        // greeting, with ways to start below it; the first message sends it
+        // down to its place under the conversation.
+        let (body, dock) = if empty_chat && self.page == Page::Chat {
+            (
+                self.empty_state(dock.into_any_element(), window, cx)
+                    .into_any_element(),
+                None,
+            )
+        } else {
+            (body, Some(dock))
+        };
         let main = v_flex()
             .relative()
             .flex_1()
@@ -5230,28 +5290,18 @@ impl Render for Chat {
                 this.on_drop(cx.listener(|this, dropped: &ExternalPaths, window, cx| {
                     this.attach_dropped(dropped.paths().to_vec(), window, cx)
                 }))
-                .child(
-                    v_flex()
-                        .w(column)
-                        .mx_auto()
-                        .px_6()
-                        .pb_2()
-                        .children(self.busy_note(cx))
-                        .children(self.goal_line(cx))
-                        .children(strip)
-                        .children(self.crew_chip(cx))
-                        .child(self.composer(pane < px(600.), cx)),
-                )
+                .children(dock)
             })
             .child(self.status_bar(pane, cx))
             // The chat draws its own over the conversation; a page has
             // nowhere else to show that F6 put the keys on it.
             .when(self.page != Page::Chat, |this| {
                 this.children(self.ring(crate::ui::keys::Region::Transcript, cx))
-            });
+            })
+            .children(self.toast_layer(window, cx));
 
-        let sidebar_in =
-            (self.motion.sidebar).track(self.sidebar_open, crate::ui::motion::STANDARD, window, cx);
+        self.open_work_if_wanted(window);
+        let sidebar = self.sidebar_frame(window, cx);
         v_flex()
             .size_full()
             .bg(cx.theme().background)
@@ -5274,8 +5324,7 @@ impl Render for Chat {
                 cx.listener(|this, _: &DismissCrew, window, cx| this.dismiss_crew(window, cx)),
             )
             .on_action(cx.listener(|this, _: &ToggleSidebar, _, cx| {
-                this.sidebar_open = !this.sidebar_open;
-                cx.notify();
+                this.toggle_sidebar(cx);
             }))
             .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
                 if !this.settings_open {
@@ -5504,8 +5553,7 @@ impl Render for Chat {
                     div()
                         .relative()
                         .flex_shrink_0()
-                        .child(self.title_bar(window, cx))
-                        .children(self.grain(&self.grains.title_bar)),
+                        .child(self.title_bar(window, cx)),
                 )
             })
             .when(!welcome, |this| {
@@ -5513,18 +5561,7 @@ impl Render for Chat {
                     h_flex()
                         .flex_1()
                         .min_h_0()
-                        .when(self.sidebar_open, |this| {
-                            let sidebar = self.sidebar(window, cx).into_any_element();
-                            // In from the left edge, in a box only while it moves.
-                            this.child(if sidebar_in < 1. {
-                                let moving = div().h_full().flex_shrink_0().relative();
-                                crate::ui::motion::slide(moving, sidebar_in, -1.)
-                                    .child(sidebar)
-                                    .into_any_element()
-                            } else {
-                                sidebar
-                            })
-                        })
+                        .child(sidebar)
                         .child(main)
                         .children(self.right_panel(window, cx)),
                 )

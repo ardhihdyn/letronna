@@ -1,6 +1,6 @@
 use crate::app::card_is_up;
 use crate::prelude::*;
-use gpui_component::{Selectable, menu::PopupMenu, notification::Notification};
+use gpui_component::{menu::PopupMenu, notification::Notification};
 
 actions!(
     sessions,
@@ -312,7 +312,7 @@ fn markdown_of(c: &Conversation) -> String {
 
 /// The file name a session called `title` is exported under, less its
 /// `.md`: letters, digits and spaces kept, anything else a dash.
-fn export_name(title: &str) -> String {
+pub(crate) fn export_name(title: &str) -> String {
     title
         .chars()
         .map(|ch| {
@@ -370,6 +370,7 @@ impl Chat {
         } else {
             "Select"
         };
+        let shared = letronna_core::share::shared_as(id).is_some();
         move |menu, _, _| {
             let item =
                 |label: &'static str,
@@ -386,7 +387,8 @@ impl Chat {
                         },
                     )
                 };
-            menu.min_w(px(200.))
+            let menu = menu
+                .min_w(px(200.))
                 .item(item("Rename", AppIcon::Pencil, Chat::rename_session))
                 .item(item("Name it again", AppIcon::Sparkles, Chat::name_again))
                 .item(item(
@@ -402,9 +404,39 @@ impl Chat {
                 .item(item("Decisions", AppIcon::Shield, Chat::show_decisions))
                 .separator()
                 .item(item(
+                    if shared {
+                        "Update shared link"
+                    } else {
+                        "Share link"
+                    },
+                    AppIcon::PopOut,
+                    Chat::share_session,
+                ));
+            let menu = if shared {
+                menu.item(item(
+                    "Copy shared link",
+                    AppIcon::FileText,
+                    Chat::copy_shared_link,
+                ))
+                .item(item("Stop sharing", AppIcon::Stop, Chat::stop_sharing))
+            } else {
+                menu
+            };
+            menu.separator()
+                .item(item(
+                    "Copy as Markdown",
+                    AppIcon::FileText,
+                    Chat::copy_session,
+                ))
+                .item(item(
                     "Export as Markdown",
                     AppIcon::Export,
                     Chat::export_session,
+                ))
+                .item(item(
+                    "Save as web page",
+                    AppIcon::Export,
+                    Chat::save_session_page,
                 ))
                 .item(item("Import a session", AppIcon::PopIn, Chat::open_import))
                 .separator()
@@ -1142,6 +1174,24 @@ impl Chat {
             )
     }
 
+    /// Put session `index` on the clipboard as Markdown, to paste to a
+    /// teammate or into an issue.
+    pub(crate) fn copy_session(
+        &mut self,
+        index: usize,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.fill_now(index);
+        let text = markdown_of(&self.store.conversations[index]);
+        cx.write_to_clipboard(ClipboardItem::new_string(text));
+        self.toast(
+            "Copied: The session is on the clipboard as Markdown.",
+            crate::ui::toast::Kind::Info,
+            cx,
+        );
+    }
+
     pub(crate) fn export_session(
         &mut self,
         index: usize,
@@ -1230,47 +1280,59 @@ impl Chat {
 
     /// One button per filter, and a toggle to group by project, in the row
     /// under the sidebar's search box.
-    pub(crate) fn session_filter_row(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        h_flex()
-            .px_2()
-            .gap_1()
-            .items_center()
-            .child(self.filter_chip(SessionFilter::NeedsYou, cx))
-            .child(self.filter_chip(SessionFilter::Working, cx))
-            .child(self.filter_chip(SessionFilter::Unseen, cx))
-            .child(self.filter_chip(SessionFilter::Pinned, cx))
-            .child(div().flex_1())
-            .child(self.group_toggle(cx))
-    }
-
-    fn filter_chip(&self, filter: SessionFilter, cx: &mut Context<Self>) -> impl IntoElement {
-        let on = self.session_filter() == Some(filter);
-        Button::new(("session-filter", filter as usize))
-            .plain(cx)
+    /// The filters and the grouping, behind one button at the search
+    /// field's end: a menu of them, each checked while it is on. Lit while
+    /// any of them is.
+    pub(crate) fn session_filter_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let filter = self.session_filter();
+        let grouped = self.store.settings.group_by_project;
+        let lit = filter.is_some() || grouped;
+        let me = cx.entity().downgrade();
+        Button::new("session-filters")
+            .ghost()
             .xsmall()
-            .selected(on)
-            .icon(Icon::new(filter.icon()).size_3().text_color(if on {
-                cx.theme().link
-            } else {
-                cx.theme().muted_foreground
-            }))
-            .tooltip(filter.label())
-            .on_click(cx.listener(move |this, _, _, cx| this.toggle_session_filter(filter, cx)))
-    }
-
-    fn group_toggle(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let on = self.store.settings.group_by_project;
-        Button::new("group-by-project")
-            .plain(cx)
-            .xsmall()
-            .selected(on)
-            .icon(Icon::new(AppIcon::Folder).size_3().text_color(if on {
-                cx.theme().link
-            } else {
-                cx.theme().muted_foreground
-            }))
-            .tooltip("Group by project")
-            .on_click(cx.listener(|this, _, _, cx| this.toggle_grouping(cx)))
+            .rounded_full()
+            .icon(
+                Icon::new(AppIcon::ListFilter)
+                    .size_3p5()
+                    .text_color(if lit {
+                        cx.theme().link
+                    } else {
+                        cx.theme().muted_foreground
+                    }),
+            )
+            .tooltip(match filter {
+                Some(f) => f.label(),
+                None => "Filter sessions",
+            })
+            .dropdown_menu(move |menu, _, _| {
+                let mut menu = menu.min_w(px(190.));
+                for f in [
+                    SessionFilter::NeedsYou,
+                    SessionFilter::Working,
+                    SessionFilter::Unseen,
+                    SessionFilter::Pinned,
+                ] {
+                    let me = me.clone();
+                    menu = menu.item(
+                        PopupMenuItem::new(f.label())
+                            .icon(Icon::new(f.icon()))
+                            .checked(filter == Some(f))
+                            .on_click(move |_, _, cx| {
+                                let _ = me.update(cx, |this, cx| this.toggle_session_filter(f, cx));
+                            }),
+                    );
+                }
+                let me = me.clone();
+                menu.separator().item(
+                    PopupMenuItem::new("Group by project")
+                        .icon(Icon::new(AppIcon::Folder))
+                        .checked(grouped)
+                        .on_click(move |_, _, cx| {
+                            let _ = me.update(cx, |this, cx| this.toggle_grouping(cx));
+                        }),
+                )
+            })
     }
 }
 

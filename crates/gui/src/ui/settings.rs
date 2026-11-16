@@ -30,10 +30,14 @@ pub(crate) const PAGES: &[(&str, AppIcon)] = &[
     ("Privacy", AppIcon::Shield),
     ("Permissions", AppIcon::Checklist),
     ("Wallet", AppIcon::Wallet),
+    ("Import", AppIcon::PopIn),
     ("Shortcuts", AppIcon::Keyboard),
-    ("Plugins", AppIcon::Puzzle),
     ("About", AppIcon::Info),
 ];
+
+/// The widest the settings sheet grows, and its corners.
+const SHEET_WIDTH: f32 = 1000.;
+const SHEET_RADIUS: f32 = 22.;
 
 /// How far down the window toasts start: below settings' close button and
 /// its focus ring, past settings' 44px margin and the button's row, 12px
@@ -1020,8 +1024,13 @@ impl Chat {
                 if closing { "panel-out" } else { "panel-in" },
                 anim(),
                 move |el, delta| {
-                    let p = if closing { 1. - delta } else { delta };
-                    el.opacity(p).mt(px(-crate::ui::motion::RISE * (1. - p)))
+                    // Up from below as a sheet, settling with a little give.
+                    if closing {
+                        el.opacity(1. - delta).mt(px(24. * delta))
+                    } else {
+                        let p = crate::ui::motion::overshoot(delta);
+                        el.opacity(delta).mt(px(40. * (1. - p)))
+                    }
                 },
             );
         Some(
@@ -1090,14 +1099,16 @@ impl Chat {
         let back = step.clone();
         let nav = PAGES.iter().zip(handles.iter()).fold(
             v_flex()
+                .id("settings-nav")
+                .overflow_y_scroll()
                 .w(px(210.))
                 .h_full()
                 .flex_shrink_0()
                 .gap_0p5()
-                .p_3()
+                .px_3()
+                .pb_3()
+                .pt_2()
                 .bg(cx.theme().sidebar)
-                .border_r_1()
-                .border_color(cx.theme().border)
                 .key_context("SettingsNav")
                 .on_action(move |_: &PreviousSettingsPage, window, cx| back(false, window, cx))
                 .on_action(move |_: &NextSettingsPage, window, cx| step(true, window, cx)),
@@ -1105,15 +1116,41 @@ impl Chat {
                 let page = page.clone();
                 let chat = chat.clone();
                 let active = *name == current_page;
+                // The groups the pages fall in, as a phone's settings list
+                // them, each under a small label.
+                let label = match *name {
+                    "Account" => Some("You"),
+                    "Accounts" => Some("Models"),
+                    "Appearance" => Some("App"),
+                    "Privacy" => Some("Safety"),
+                    "Import" => Some("More"),
+                    _ => None,
+                };
+                // One quiet tile for every page; only the open one is blue.
+                let (tile, glyph) = if active {
+                    (cx.theme().primary, cx.theme().primary_foreground)
+                } else {
+                    (cx.theme().sidebar_accent, cx.theme().muted_foreground)
+                };
+                let nav = nav.children(label.map(|label| {
+                    div()
+                        .px_2()
+                        .pt_3()
+                        .pb_1()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(cx.theme().muted_foreground)
+                        .child(label.to_uppercase())
+                }));
                 nav.child(
                     h_flex()
                         .id(*name)
                         .track_focus(focus)
-                        .h(px(30.))
-                        .px_2()
-                        .gap_2()
+                        .h(px(34.))
+                        .px_1p5()
+                        .gap_2p5()
                         .items_center()
-                        .rounded(cx.theme().radius)
+                        .rounded(px(9.))
                         // Always there, so the ring the keys bring moves
                         // nothing.
                         .border_1()
@@ -1126,9 +1163,15 @@ impl Chat {
                         .focus(|s| s.border_color(cx.theme().ring))
                         .active(|s| s.bg(cx.theme().sidebar_accent.opacity(0.6)))
                         .child(
-                            Icon::new(*icon)
-                                .size_4()
-                                .text_color(cx.theme().muted_foreground),
+                            div()
+                                .size(px(22.))
+                                .flex_shrink_0()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded(px(6.))
+                                .bg(tile)
+                                .child(Icon::new(*icon).size_3p5().text_color(glyph)),
                         )
                         .child(*name)
                         .on_click(move |_, _, cx| show_page(name, &page, &chat, cx)),
@@ -1170,17 +1213,34 @@ impl Chat {
             "Thinking" => thinking_page(&chat, &self.store, self.servers_found.as_ref(), window, cx)
                 .into_any_element(),
             "Permissions" => self.permissions_page(cx).into_any_element(),
+            "Import" => {
+                let to = chat.clone();
+                v_flex()
+                    .gap_5()
+                    .child(heading(
+                        "Import sessions",
+                        "Carry on a session started in Claude Code or Codex, or in Cursor, \
+                         Gemini CLI, opencode and others. Their sessions are only read; the \
+                         originals are never changed.",
+                        cx,
+                    ))
+                    .child(
+                        h_flex().child(
+                            Button::new("settings-open-import")
+                                .primary()
+                                .icon(Icon::new(AppIcon::PopIn))
+                                .label("Scan this computer")
+                                .on_click(move |_, window, cx| {
+                                    to.update(cx, |this, cx| {
+                                        this.close_settings(window, cx);
+                                        this.open_import_page(window, cx);
+                                    })
+                                }),
+                        ),
+                    )
+                    .into_any_element()
+            }
             "Shortcuts" => shortcuts_page(&hotkey, &chat, cx).into_any_element(),
-            "Plugins" => plugins_page(
-                self.gateway_rows(),
-                &pick,
-                &endpoint,
-                &key,
-                &page,
-                &chat,
-                cx,
-            )
-            .into_any_element(),
             "Wallet" => super::wallet::wallet_settings(&chat, &self.wallet, cx).into_any_element(),
             "Memory" => v_flex()
                 .gap_5()
@@ -1238,18 +1298,21 @@ impl Chat {
                 .into_any_element()
             }
         };
+        // A sheet over the window: no wider than reads well, with the
+        // phone's round corners and a deep shadow.
         keeps_keys(div(), &self.settings_focus)
-            .w(vp.width - gap * 2.)
+            .w((vp.width - gap * 2.).min(px(SHEET_WIDTH)))
             .bg(cx.theme().background)
             .border_1()
             .border_color(cx.theme().border)
-            .rounded(cx.theme().radius_lg)
+            .rounded(px(SHEET_RADIUS))
+            .shadow_2xl()
             .child(
                 h_flex()
                     .h(height)
                     .items_start()
                     .overflow_hidden()
-                    .rounded(cx.theme().radius_lg)
+                    .rounded(px(SHEET_RADIUS))
                     .child(nav)
                     .child(
                         div()
@@ -1264,9 +1327,9 @@ impl Chat {
                                     .track_scroll(&body_scroll)
                                     .size_full()
                                     .overflow_y_scroll()
-                                    .px_8()
-                                    .py_6()
-                                    .child(div().child(body).with_animation(
+                                    .px_10()
+                                    .py_8()
+                                    .child(div().max_w(px(680.)).child(body).with_animation(
                                         SharedString::from(format!("page-{current_page}")),
                                         crate::ui::motion::enter(crate::ui::motion::QUICK),
                                         |el, delta| el.opacity(delta).mt(px(6. * (1. - delta))),
@@ -1363,115 +1426,12 @@ fn show_page(name: &'static str, page: &Entity<&'static str>, chat: &Entity<Chat
     }
 }
 
-fn plugins_page(
-    mut rows: Vec<GatewayRow>,
-    pick: &Entity<String>,
-    endpoint: &Entity<InputState>,
-    key: &Entity<InputState>,
-    page: &Entity<&'static str>,
-    chat: &Entity<Chat>,
-    cx: &App,
-) -> Div {
-    let mut list = v_flex();
-    for info in plugins::list(cx) {
-        let toggle = chat.clone();
-        let id = info.id;
-        let enabled = info.enabled;
-        let provider = info.provider;
-        let row = h_flex()
-            .items_center()
-            .justify_between()
-            .gap_3()
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .gap_0p5()
-                    .child(
-                        h_flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(info.name),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .px_1p5()
-                                    .rounded(cx.theme().radius)
-                                    .bg(cx.theme().secondary)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(if info.builtin { "Built in" } else { "External" }),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(info.description),
-                    ),
-            )
-            .child(
-                div().flex_shrink_0().cursor_pointer().child(
-                    KeyedSwitch::new(SharedString::from(format!("plugin-{id}")))
-                        .checked(enabled)
-                        .on_click(move |_, window, cx| {
-                            plugins::set_enabled(cx, id, !enabled);
-                            toggle.update(cx, |this, cx| {
-                                // Its provider's models join the list or leave it.
-                                if provider.is_some() {
-                                    this.load_models(window, cx);
-                                }
-                                cx.notify()
-                            });
-                        }),
-                ),
-            );
-        let settings = if enabled {
-            plugins::render_settings(cx, id)
-        } else {
-            None
-        };
-        // The provider it offers, with the row the Accounts page would give it.
-        let account = provider.filter(|_| enabled).map(|name| {
-            // Each of its accounts, the first and any added after it.
-            let (own, rest): (Vec<_>, Vec<_>) =
-                std::mem::take(&mut rows).into_iter().partition(|row| {
-                    letronna_core::providers::accounts::provider_of(row.name) == Some(name)
-                });
-            rows = rest;
-            gateway_list(own, pick, endpoint, key, page, chat, cx)
-        });
-        list = list.child(
-            v_flex()
-                .gap_2()
-                .py_3()
-                .border_b_1()
-                .border_color(cx.theme().border)
-                .child(row)
-                .children(settings)
-                .children(account),
-        );
-    }
-    v_flex()
-        .gap_4()
-        .child(heading(
-            "Plugins",
-            "Optional integrations. Toggle one off to unload it. Choices are saved in plugin-switches.json.",
-            cx,
-        ))
-        .child(list)
-}
-
 pub(crate) fn heading(title: &'static str, blurb: &'static str, cx: &App) -> Div {
     v_flex()
         .gap_1()
         .child(
             div()
-                .text_base()
+                .text_lg()
                 .font_family(HEADING_FONT)
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(title),
@@ -1504,8 +1464,10 @@ fn elsewhere_row(chat: &Entity<Chat>, address: &Entity<InputState>, cx: &App) ->
         .gap_2()
         .px_3()
         .py_2p5()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().secondary.opacity(0.3))
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
         .child(
             v_flex()
                 .gap_0p5()
@@ -1558,8 +1520,10 @@ fn keep_row(chat: &Entity<Chat>, days: &Entity<InputState>, kept: u32, cx: &App)
         .gap_2()
         .px_3()
         .py_2p5()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().secondary.opacity(0.3))
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
         .child(
             v_flex()
                 .gap_0p5()
@@ -1640,8 +1604,10 @@ fn privacy_page(
         .gap_3()
         .px_3()
         .py_2p5()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().secondary.opacity(0.3))
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
         .child(
             div()
                 .text_sm()
@@ -1686,8 +1652,10 @@ fn privacy_page(
         .gap_3()
         .px_3()
         .py_2p5()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().secondary.opacity(0.3))
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
         .child(
             v_flex()
                 .flex_1()
@@ -1745,8 +1713,10 @@ fn privacy_page(
         .gap_3()
         .px_3()
         .py_2p5()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().secondary.opacity(0.3))
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
         .child(
             v_flex()
                 .flex_1()
@@ -1788,8 +1758,10 @@ fn privacy_page(
         .gap_3()
         .px_3()
         .py_2p5()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().secondary.opacity(0.3))
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
         .child(
             v_flex()
                 .flex_1()
@@ -1855,7 +1827,7 @@ fn privacy_page(
             "Sessions stay on this computer until you delete them, unless you choose otherwise.",
             cx,
         ))
-        .child(keep_row(chat, keep_days, settings.keep_days, cx))
+        .child(card(keep_row(chat, keep_days, settings.keep_days, cx), cx))
         .child(heading(
             "Browser",
             "Each session browses in a browser of its own, as a separate agent would.",
@@ -1863,10 +1835,10 @@ fn privacy_page(
         ))
         .child(browser)
         .child(seen)
-        .child(elsewhere_row(chat, address, cx))
+        .child(card(elsewhere_row(chat, address, cx), cx))
         .child(heading(
             "Discord Rich Presence",
-            "What Letronna shares with Discord. The integration is turned on or off in the Plugins tab.",
+            "What Letronna shares with Discord. The integration is turned on or off on the Plugins page.",
             cx,
         ))
         .child(if enabled {
@@ -1874,11 +1846,13 @@ fn privacy_page(
         } else {
             div()
                 .p_3()
-                .rounded(cx.theme().radius)
-                .bg(cx.theme().secondary.opacity(0.3))
+                .rounded(cx.theme().radius_lg)
+                .border_1()
+                .border_color(cx.theme().border)
+                .bg(cx.theme().secondary)
                 .text_sm()
                 .text_color(cx.theme().muted_foreground)
-                .child("Discord Rich Presence is off. Enable it in the Plugins tab to choose what to share.")
+                .child("Discord Rich Presence is off. Turn it on on the Plugins page to choose what to share.")
                 .into_any_element()
         })
 }
@@ -2113,13 +2087,19 @@ fn appearance_page(
     window: &mut Window,
     cx: &mut App,
 ) -> Div {
-    const LOOKS: [(&str, &str, &str); 3] = [
+    const LOOKS: [(&str, &str, &str); 5] = [
         ("", "night", "Night — midnight blue around a dark ink page"),
+        (
+            "ink",
+            "ink",
+            "Ink — Night on true black, for an OLED screen",
+        ),
         (
             "paper",
             "paper",
             "Paper — ink on a light page, for daylight",
         ),
+        ("sand", "sand", "Sand — Paper warmed, brown ink on sand"),
         (
             "system",
             "system",
@@ -2127,7 +2107,7 @@ fn appearance_page(
         ),
     ];
 
-    let mut looks = v_flex().gap_2();
+    let mut looks = card(v_flex(), cx).p_1().gap_0p5();
     for (value, id, text) in LOOKS {
         let active = settings.appearance == value;
         // A tab stop of its own, so Tab reaches each choice and Enter or
@@ -2148,12 +2128,8 @@ fn appearance_page(
                 .gap_2p5()
                 .p_2p5()
                 .rounded(cx.theme().radius)
-                .border_1()
-                .border_color(if active {
-                    cx.theme().primary
-                } else {
-                    cx.theme().border
-                })
+                .when(active, |this| this.bg(cx.theme().primary.opacity(0.12)))
+                .hover(|s| s.bg(cx.theme().list_hover))
                 .focus(|s| s.border_color(cx.theme().ring))
                 .child(div().flex_1().min_w_0().text_sm().child(text))
                 // Paper's focus ring is its primary blue, so the chosen row
@@ -2163,6 +2139,13 @@ fn appearance_page(
                         Icon::new(IconName::Check)
                             .small()
                             .text_color(cx.theme().primary),
+                    )
+                })
+                .when(active, |this| {
+                    this.child(div().flex_1()).child(
+                        Icon::new(IconName::Check)
+                            .size_4()
+                            .text_color(cx.theme().link),
                     )
                 })
                 .on_click(move |_, window, cx| {
@@ -2208,7 +2191,7 @@ fn appearance_page(
             cx,
         ))
         .child(v_flex().gap_1().child(label("Theme", cx)).child(looks))
-        .child(text_size_row(chat, settings.text_step, cx))
+        .child(card(text_size_row(chat, settings.text_step, cx), cx))
         .child(grain)
         .child(motion)
 }
@@ -2286,7 +2269,7 @@ fn naming_section(
         cx,
         std::rc::Rc::new(|this: &mut Chat| this.store.settings.auto_title ^= true),
     );
-    let mut section = v_flex()
+    let section = v_flex()
         .gap_2()
         .child(label("Session names", cx))
         .child(switch);
@@ -2306,29 +2289,41 @@ fn naming_section(
             "The model the chat is on names it.",
         ),
     ];
+    // One card of choices, the picked one tinted and ticked.
+    let mut group = card(v_flex(), cx).p_1().gap_0p5();
     for (at, (value, title, text)) in choices.into_iter().enumerate() {
         let active = settings.title_model.trim() == value;
         let (chat, own) = (chat.clone(), own.clone());
-        section = section.child(
-            v_flex()
+        group = group.child(
+            h_flex()
                 .id(("naming", at))
                 .cursor_pointer()
-                .gap_0p5()
+                .items_center()
+                .gap_2()
                 .p_2p5()
                 .rounded(cx.theme().radius)
-                .border_1()
-                .border_color(if active {
-                    cx.theme().primary
-                } else {
-                    cx.theme().border
-                })
-                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(title))
+                .when(active, |this| this.bg(cx.theme().primary.opacity(0.12)))
+                .hover(|s| s.bg(cx.theme().list_hover))
                 .child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(text),
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .gap_0p5()
+                        .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(title))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(text),
+                        ),
                 )
+                .when(active, |this| {
+                    this.child(
+                        Icon::new(IconName::Check)
+                            .size_4()
+                            .text_color(cx.theme().link),
+                    )
+                })
                 .on_click(move |_, window, cx| {
                     own.update(cx, |input, cx| input.set_value("", window, cx));
                     chat.update(cx, |this, cx| {
@@ -2339,7 +2334,7 @@ fn naming_section(
                 }),
         );
     }
-    section.child(
+    section.child(group).child(
         v_flex()
             .gap_1()
             .child(
@@ -2378,7 +2373,7 @@ fn thinking_page(
     let auto = ("", "Whatever the model likes");
     let choices = offered.iter().map(|level| (&*level.id, &*level.label));
 
-    let mut levels = v_flex().gap_2();
+    let mut levels = card(v_flex(), cx).p_1().gap_0p5();
     for (at, (value, text)) in std::iter::once(auto).chain(choices).enumerate() {
         let active = sent.unwrap_or_default() == value;
         let (chat, value) = (chat.clone(), value.to_owned());
@@ -2390,13 +2385,16 @@ fn thinking_page(
                 .gap_2p5()
                 .p_2p5()
                 .rounded(cx.theme().radius)
-                .border_1()
-                .border_color(if active {
-                    cx.theme().primary
-                } else {
-                    cx.theme().border
-                })
+                .when(active, |this| this.bg(cx.theme().primary.opacity(0.12)))
+                .hover(|s| s.bg(cx.theme().list_hover))
                 .child(div().text_sm().child(text.to_owned()))
+                .when(active, |this| {
+                    this.child(div().flex_1()).child(
+                        Icon::new(IconName::Check)
+                            .size_4()
+                            .text_color(cx.theme().link),
+                    )
+                })
                 .on_click(move |_, _, cx| {
                     chat.update(cx, |this, cx| {
                         this.store.choose_effort(this.store.active, &value);
@@ -2433,7 +2431,7 @@ fn thinking_page(
         }
         (style.name, text)
     });
-    let mut styles = v_flex().gap_2();
+    let mut styles = card(v_flex(), cx).p_1().gap_0p5();
     for (at, (value, text)) in std::iter::once(default).chain(own).enumerate() {
         let active = current == value;
         let (chat, shown) = (chat.clone(), shown.clone());
@@ -2445,13 +2443,16 @@ fn thinking_page(
                 .gap_2p5()
                 .p_2p5()
                 .rounded(cx.theme().radius)
-                .border_1()
-                .border_color(if active {
-                    cx.theme().primary
-                } else {
-                    cx.theme().border
-                })
+                .when(active, |this| this.bg(cx.theme().primary.opacity(0.12)))
+                .hover(|s| s.bg(cx.theme().list_hover))
                 .child(div().text_sm().child(text))
+                .when(active, |this| {
+                    this.child(div().flex_1()).child(
+                        Icon::new(IconName::Check)
+                            .size_4()
+                            .text_color(cx.theme().link),
+                    )
+                })
                 .on_click(move |_, _, cx| {
                     chat.update(cx, |this, cx| {
                         this.store.choose_style(&value);
@@ -2667,7 +2668,7 @@ fn switch_row(
     cx: &App,
     turn: impl Fn(&mut App) + 'static,
 ) -> Div {
-    h_flex()
+    card(h_flex(), cx)
         .justify_between()
         .items_center()
         .gap_4()
@@ -2693,6 +2694,17 @@ fn switch_row(
                     .on_click(move |_, _, cx| turn(cx)),
             ),
         )
+}
+
+/// A setting's row as the phone draws it: on a raised, rounded card of
+/// its own, with room around what it holds.
+pub(crate) fn card(el: Div, cx: &App) -> Div {
+    el.px_4()
+        .py_3()
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
 }
 
 /// What turning a switch does, given whether it is now on.
@@ -3412,7 +3424,7 @@ fn tool_search_section(
         "jev" | "names" => mode,
         _ => "auto",
     };
-    let mut ways = v_flex().gap_2();
+    let mut ways = card(v_flex(), cx).p_1().gap_0p5();
     for (at, (value, title, text)) in choices.into_iter().enumerate() {
         let active = mode == value;
         let chat = chat.clone();
@@ -3424,12 +3436,8 @@ fn tool_search_section(
                 .gap_2p5()
                 .p_2p5()
                 .rounded(cx.theme().radius)
-                .border_1()
-                .border_color(if active {
-                    cx.theme().primary
-                } else {
-                    cx.theme().border
-                })
+                .when(active, |this| this.bg(cx.theme().primary.opacity(0.12)))
+                .hover(|s| s.bg(cx.theme().list_hover))
                 .child(
                     v_flex()
                         .gap_0p5()
@@ -3441,6 +3449,13 @@ fn tool_search_section(
                                 .child(text),
                         ),
                 )
+                .when(active, |this| {
+                    this.child(div().flex_1()).child(
+                        Icon::new(IconName::Check)
+                            .size_4()
+                            .text_color(cx.theme().link),
+                    )
+                })
                 .on_click(move |_, _, cx| {
                     chat.update(cx, |this, cx| {
                         this.store.settings.tool_search = value.to_owned();
@@ -4058,16 +4073,20 @@ fn browser_sign_in(
     let (go, paste, cancel) = (chat.clone(), chat.clone(), chat.clone());
     let remove = chat.clone();
     let body = v_flex().gap_3().children(caveat.map(|caveat| {
+        // Wraps: a caveat runs longer than the box is wide.
         h_flex()
+            .w_full()
             .gap_2()
-            .items_center()
+            .items_start()
             .text_xs()
             .child(
                 Icon::new(IconName::Info)
                     .size_3p5()
+                    .mt(px(1.))
+                    .flex_shrink_0()
                     .text_color(cx.theme().muted_foreground),
             )
-            .child(caveat)
+            .child(div().flex_1().min_w_0().child(caveat))
     }));
     if !waiting {
         return body.child(
@@ -4739,10 +4758,11 @@ fn add_tiles(
         let offered = row.offered;
         tiles = tiles.child(
             tile(i, row.name.into(), tag, on).on_click(move |_, window, cx| {
+                // Plugins are one page, outside Settings: there.
                 if !offered {
-                    return to.update(cx, |p, cx| {
-                        *p = "Plugins";
-                        cx.notify();
+                    return chat.update(cx, |this, cx| {
+                        this.close_settings(window, cx);
+                        this.open_page(Page::Plugins, window, cx);
                     });
                 }
                 if gname == LETRONNA {

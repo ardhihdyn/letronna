@@ -1,7 +1,7 @@
 //! A faint film grain for the window's chrome and empty pages.
 //!
 //! letronna.ai draws noise over its whole page. The window keeps it to places
-//! nobody reads for long -- the title bar, the sidebar, the empty chat and the
+//! nobody reads for long -- the empty chat and the
 //! settings backdrop -- and never lays it over the transcript, code or diffs.
 //! gpui has no tiled image, so a canvas paints one 512px tile across its
 //! bounds, a tile pixel to each screen pixel. The tile comes from a fixed seed
@@ -81,8 +81,6 @@ impl Render for Grain {
 /// A grain view for each surface that has one; a cached view keeps one
 /// recording, so two surfaces cannot share it.
 pub(crate) struct Grains {
-    pub(crate) title_bar: Entity<Grain>,
-    pub(crate) sidebar: Entity<Grain>,
     pub(crate) empty_chat: Entity<Grain>,
     pub(crate) settings: Entity<Grain>,
 }
@@ -90,8 +88,6 @@ pub(crate) struct Grains {
 impl Grains {
     pub(crate) fn new(cx: &mut App) -> Self {
         Self {
-            title_bar: cx.new(|_| Grain),
-            sidebar: cx.new(|_| Grain),
             empty_chat: cx.new(|_| Grain),
             settings: cx.new(|_| Grain),
         }

@@ -16,6 +16,7 @@ This file is also the App tab of https://letronna.ai/changelog.
 ## [1.0.0] - 2026-11-16
 
 ### Added
+- **App** — Settings › Import scans this computer for sessions from Claude Code, Codex, Cursor, Gemini CLI, opencode and the others, one section a tool, and brings one in to carry on here. `/import` and the palette open it too. The originals are only read.
 - **App** — Checkpoints, beside the chat: each turn that changed files in the project, newest first, with what was asked and which files. Restore to before this asks once more, then puts every file changed from that turn on back as it was, keeping the conversation and telling the model.
 - **App** — A Tasks page lists every session's checklist by project: what is being done, what waits and how far along. A card opens its session.
 - **App** — Never allow, beside Always allow on the approval card: the call is denied and calls like it are refused in that project from then on. Settings › Permissions removes the rule.

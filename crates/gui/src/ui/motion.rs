@@ -185,11 +185,10 @@ fn switched(on: bool, held: Option<bool>, flag: bool) -> Switch {
     }
 }
 
-/// The pieces of the window that come in: the sidebar, the panel beside the
+/// The pieces of the window that come in: the panel beside the
 /// chat, the rows of the chat and what the user opens in them.
 #[derive(Default)]
 pub(crate) struct Moves {
-    pub(crate) sidebar: Entrance,
     pub(crate) panel: Entrance,
     pub(crate) rows: Arrivals,
     pub(crate) opened: Opened,

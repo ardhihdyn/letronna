@@ -248,6 +248,8 @@ pub(crate) struct Chat {
     /// brought it back. Any other session shows its own conversation.
     pub(crate) show_setup: Option<u64>,
     pub(crate) sidebar_open: bool,
+    /// When the sidebar last began to open or fold; see `ui::sidebar`.
+    pub(crate) sidebar_moved: Option<std::time::Instant>,
     /// The sidebar, the panel and the chat's rows coming in.
     pub(crate) motion: crate::ui::motion::Moves,
     pub(crate) greeting: &'static str,
@@ -1018,6 +1020,7 @@ impl Chat {
             page: Page::Chat,
             show_setup,
             sidebar_open: true,
+            sidebar_moved: None,
             motion: Default::default(),
             greeting,
             account,
@@ -5045,11 +5048,7 @@ impl Render for Chat {
         // it cannot push back on a definite one. Worked out here, not by
         // measuring the pane, so a resize does not lag a frame behind.
         let pane = window.viewport_size().width
-            - if self.sidebar_open {
-                crate::ui::sidebar::SIDEBAR_WIDTH
-            } else {
-                px(0.)
-            }
+            - self.sidebar_room()
             // Beside the docked panel, less again.
             - self.panel_width(window, cx);
         let column = pane.min(COLUMN).max(px(0.));
@@ -5214,8 +5213,7 @@ impl Render for Chat {
             })
             .children(self.toast_layer(cx));
 
-        let sidebar_in =
-            (self.motion.sidebar).track(self.sidebar_open, crate::ui::motion::STANDARD, window, cx);
+        let sidebar = self.sidebar_frame(window, cx);
         v_flex()
             .size_full()
             .bg(cx.theme().background)
@@ -5238,8 +5236,7 @@ impl Render for Chat {
                 cx.listener(|this, _: &DismissCrew, window, cx| this.dismiss_crew(window, cx)),
             )
             .on_action(cx.listener(|this, _: &ToggleSidebar, _, cx| {
-                this.sidebar_open = !this.sidebar_open;
-                cx.notify();
+                this.toggle_sidebar(cx);
             }))
             .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
                 if !this.settings_open {
@@ -5477,18 +5474,7 @@ impl Render for Chat {
                     h_flex()
                         .flex_1()
                         .min_h_0()
-                        .when(self.sidebar_open, |this| {
-                            let sidebar = self.sidebar(window, cx).into_any_element();
-                            // In from the left edge, in a box only while it moves.
-                            this.child(if sidebar_in < 1. {
-                                let moving = div().h_full().flex_shrink_0().relative();
-                                crate::ui::motion::slide(moving, sidebar_in, -1.)
-                                    .child(sidebar)
-                                    .into_any_element()
-                            } else {
-                                sidebar
-                            })
-                        })
+                        .child(sidebar)
                         .child(main)
                         .children(self.right_panel(window, cx)),
                 )

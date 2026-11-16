@@ -363,11 +363,7 @@ impl Chat {
 
     /// How much of the window the sidebar takes.
     fn sidebar_width(&self) -> Pixels {
-        if self.sidebar_open {
-            crate::ui::sidebar::SIDEBAR_WIDTH
-        } else {
-            px(0.)
-        }
+        self.sidebar_room()
     }
 
     /// Show the panel on the session's tab, or hide it. With nothing else

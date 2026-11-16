@@ -41,35 +41,21 @@ impl Chat {
                     // Nothing follows the chip on macOS, so keep it off the edge.
                     .when(cfg!(target_os = "macos"), |bar| bar.pr_3())
                     .child(
-                        h_flex()
-                            .flex_1()
-                            .items_center()
-                            .gap_2()
-                            .child(no_drag(
-                                Button::new("toggle-sidebar")
-                                    .plain(cx)
-                                    .small()
-                                    .icon(
-                                        Icon::new(if self.sidebar_open {
-                                            IconName::PanelLeftClose
-                                        } else {
-                                            IconName::PanelLeftOpen
-                                        })
-                                        .size_4(),
-                                    )
-                                    .tooltip_with_action("Toggle sidebar", &ToggleSidebar, None)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.sidebar_open = !this.sidebar_open;
-                                        cx.notify();
-                                    })),
-                            ))
-                            .child(
-                                div()
-                                    .text_base()
-                                    .font_family(WORDMARK_FONT)
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Letronna"),
-                            ),
+                        h_flex().flex_1().items_center().gap_2().child(no_drag(
+                            Button::new("toggle-sidebar")
+                                .plain(cx)
+                                .small()
+                                .icon(
+                                    Icon::new(if self.sidebar_open {
+                                        IconName::PanelLeftClose
+                                    } else {
+                                        IconName::PanelLeftOpen
+                                    })
+                                    .size_4(),
+                                )
+                                .tooltip_with_action("Toggle sidebar", &ToggleSidebar, None)
+                                .on_click(cx.listener(|this, _, _, cx| this.toggle_sidebar(cx))),
+                        )),
                     )
                     // The session in the middle of the bar, its model under
                     // it, as the phone heads a chat.

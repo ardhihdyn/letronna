@@ -1,5 +1,5 @@
-//! The window's own toast: one short line in a pill floating over the
-//! chat, just above the composer, as the phone says things. It rises in,
+//! The window's own toast: a heads-up card that drops in from under the
+//! title bar over the chat, coloured by what it is. It drops in,
 //! stays a few seconds -- longer while the pointer is on it, so an error
 //! can be read and copied -- and fades away. A newer one takes its place.
 
@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 /// How long a toast stays once nothing holds it.
 const STAY: Duration = Duration::from_secs(5);
 /// How long it takes to rise in and to fade out.
-const MOVE: Duration = Duration::from_millis(220);
+const MOVE: Duration = Duration::from_millis(320);
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Kind {
@@ -92,34 +92,38 @@ impl Chat {
         .detach();
     }
 
-    /// The toast, placed over the chat above the composer, or nothing.
+    /// The toast, dropped from under the title bar over the chat, or
+    /// nothing. Its colour says what kind it is before a word is read: a
+    /// filled badge, a tinted edge, and a headline over the message.
     pub(crate) fn toast_layer(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
         let toast = self.toast.as_ref()?;
         let theme = cx.theme();
-        let (icon, tint) = match toast.kind {
-            Kind::Info => (IconName::Info, theme.link),
-            Kind::Warning => (IconName::TriangleAlert, theme.warning),
-            Kind::Error => (IconName::CircleX, theme.danger),
+        let (icon, tint, headline) = match toast.kind {
+            Kind::Info => (IconName::Info, theme.primary, "Heads up"),
+            Kind::Warning => (IconName::TriangleAlert, theme.warning, "Check this"),
+            Kind::Error => (IconName::CircleX, theme.danger, "Something went wrong"),
         };
         let text = toast.text.clone();
         let copied = toast.copied;
         let leaving = toast.leaving;
         let turn = toast.turn;
-        let pill = h_flex()
+        let muted = theme.muted_foreground;
+        let card = h_flex()
             .id(("toast", turn as usize))
             .occlude()
             .relative()
-            .max_w(px(560.))
-            .gap_2p5()
-            .items_center()
-            .pl_4()
+            .w(px(440.))
+            .max_w_full()
+            .gap_3()
+            .items_start()
+            .pl_3()
             .pr_1p5()
-            .py_1p5()
-            .rounded(px(22.))
-            .bg(theme.foreground)
-            .text_color(theme.background)
-            .text_sm()
-            .shadow_lg()
+            .py_2p5()
+            .rounded(px(18.))
+            .border_1()
+            .border_color(tint.opacity(0.45))
+            .bg(theme.popover)
+            .shadow_xl()
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 if let Some(toast) = this.toast.as_mut().filter(|t| t.turn == turn) {
                     toast.hovered = *hovered;
@@ -130,53 +134,87 @@ impl Chat {
                     }
                 }
             }))
-            .child(Icon::new(icon).size_4().text_color(tint))
-            .child(div().flex_1().min_w_0().line_clamp(2).child(text.clone()))
             .child(
-                Button::new("toast-copy")
-                    .ghost()
-                    .xsmall()
+                div()
+                    .size(px(30.))
+                    .flex_shrink_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
                     .rounded_full()
-                    .text_color(theme.background)
-                    .icon(Icon::new(if copied {
-                        IconName::Check
-                    } else {
-                        IconName::Copy
-                    }))
-                    .tooltip("Copy")
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
-                        if let Some(toast) = this.toast.as_mut() {
-                            toast.copied = true;
-                        }
-                        cx.notify();
-                    })),
+                    .bg(tint)
+                    .child(Icon::new(icon).size_4().text_color(theme.background)),
             )
             .child(
-                Button::new("toast-close")
-                    .ghost()
-                    .xsmall()
-                    .rounded_full()
-                    .text_color(theme.background)
-                    .icon(Icon::new(IconName::Close))
-                    .tooltip("Dismiss")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.toast = None;
-                        cx.notify();
-                    })),
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .gap_0p5()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(tint)
+                            .child(headline),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(theme.foreground)
+                            .line_clamp(3)
+                            .child(text.clone()),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .flex_shrink_0()
+                    .child(
+                        Button::new("toast-copy")
+                            .ghost()
+                            .xsmall()
+                            .text_color(muted)
+                            .icon(Icon::new(if copied {
+                                IconName::Check
+                            } else {
+                                IconName::Copy
+                            }))
+                            .tooltip("Copy")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
+                                if let Some(toast) = this.toast.as_mut() {
+                                    toast.copied = true;
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("toast-close")
+                            .ghost()
+                            .xsmall()
+                            .text_color(muted)
+                            .icon(Icon::new(IconName::Close))
+                            .tooltip("Dismiss")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.toast = None;
+                                cx.notify();
+                            })),
+                    ),
             );
-        let pill = if leaving {
-            pill.with_animation(
+        let card = if leaving {
+            card.with_animation(
                 ("toast-out", turn as usize),
                 crate::ui::motion::exit(MOVE),
-                |el, t| el.opacity(1. - t).top(px(8. * t)),
+                |el, t| el.opacity(1. - t).top(px(-16. * t)),
             )
             .into_any_element()
         } else {
-            pill.with_animation(
+            card.with_animation(
                 ("toast-in", turn as usize),
                 crate::ui::motion::enter(MOVE),
-                |el, t| el.opacity(t).top(px(12. * (1. - t))),
+                |el, t| {
+                    let t = crate::ui::motion::overshoot(t);
+                    el.opacity(t.min(1.)).top(px(-24. * (1. - t)))
+                },
             )
             .into_any_element()
         };
@@ -185,14 +223,13 @@ impl Chat {
                 .absolute()
                 .left_0()
                 .right_0()
-                .bottom(px(TOAST_BOTTOM))
+                .top(px(TOAST_TOP))
                 .justify_center()
                 .px_6()
-                .child(pill),
+                .child(card),
         )
     }
 }
 
-/// How far above the window's foot the toast floats: clear of the
-/// composer and the status bar under it.
-const TOAST_BOTTOM: f32 = 108.;
+/// How far under the top of the chat the toast drops to.
+const TOAST_TOP: f32 = 12.;

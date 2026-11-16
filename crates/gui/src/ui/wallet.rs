@@ -538,8 +538,10 @@ impl Chat {
             .gap_3()
             .px_3()
             .py_2p5()
-            .rounded(cx.theme().radius)
-            .bg(cx.theme().secondary.opacity(0.3))
+            .rounded(cx.theme().radius_lg)
+            .border_1()
+            .border_color(cx.theme().border)
+            .bg(cx.theme().secondary)
             .child(choice)
             .child(Input::new(&page.name).small())
             .when(adding == Adding::Import, |this| {

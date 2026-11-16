@@ -337,9 +337,12 @@ impl Chat {
         v_flex()
             .w_full()
             .gap_2()
+            .px_4()
             .py_3()
-            .border_b_1()
+            .rounded(cx.theme().radius_lg)
+            .border_1()
             .border_color(cx.theme().border)
+            .bg(cx.theme().secondary)
             .child(
                 h_flex()
                     .w_full()

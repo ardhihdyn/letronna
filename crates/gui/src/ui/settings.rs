@@ -1434,8 +1434,10 @@ fn elsewhere_row(chat: &Entity<Chat>, address: &Entity<InputState>, cx: &App) ->
         .gap_2()
         .px_3()
         .py_2p5()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().secondary.opacity(0.3))
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
         .child(
             v_flex()
                 .gap_0p5()
@@ -1488,8 +1490,10 @@ fn keep_row(chat: &Entity<Chat>, days: &Entity<InputState>, kept: u32, cx: &App)
         .gap_2()
         .px_3()
         .py_2p5()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().secondary.opacity(0.3))
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
         .child(
             v_flex()
                 .gap_0p5()
@@ -1570,8 +1574,10 @@ fn privacy_page(
         .gap_3()
         .px_3()
         .py_2p5()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().secondary.opacity(0.3))
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
         .child(
             div()
                 .text_sm()
@@ -1616,8 +1622,10 @@ fn privacy_page(
         .gap_3()
         .px_3()
         .py_2p5()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().secondary.opacity(0.3))
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
         .child(
             v_flex()
                 .flex_1()
@@ -1675,8 +1683,10 @@ fn privacy_page(
         .gap_3()
         .px_3()
         .py_2p5()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().secondary.opacity(0.3))
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
         .child(
             v_flex()
                 .flex_1()
@@ -1718,8 +1728,10 @@ fn privacy_page(
         .gap_3()
         .px_3()
         .py_2p5()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().secondary.opacity(0.3))
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
         .child(
             v_flex()
                 .flex_1()
@@ -1804,8 +1816,10 @@ fn privacy_page(
         } else {
             div()
                 .p_3()
-                .rounded(cx.theme().radius)
-                .bg(cx.theme().secondary.opacity(0.3))
+                .rounded(cx.theme().radius_lg)
+                .border_1()
+                .border_color(cx.theme().border)
+                .bg(cx.theme().secondary)
                 .text_sm()
                 .text_color(cx.theme().muted_foreground)
                 .child("Discord Rich Presence is off. Turn it on on the Plugins page to choose what to share.")
@@ -2225,7 +2239,7 @@ fn naming_section(
         cx,
         std::rc::Rc::new(|this: &mut Chat| this.store.settings.auto_title ^= true),
     );
-    let mut section = v_flex()
+    let section = v_flex()
         .gap_2()
         .child(label("Session names", cx))
         .child(switch);
@@ -2245,29 +2259,41 @@ fn naming_section(
             "The model the chat is on names it.",
         ),
     ];
+    // One card of choices, the picked one tinted and ticked.
+    let mut group = card(v_flex(), cx).p_1().gap_0p5();
     for (at, (value, title, text)) in choices.into_iter().enumerate() {
         let active = settings.title_model.trim() == value;
         let (chat, own) = (chat.clone(), own.clone());
-        section = section.child(
-            v_flex()
+        group = group.child(
+            h_flex()
                 .id(("naming", at))
                 .cursor_pointer()
-                .gap_0p5()
+                .items_center()
+                .gap_2()
                 .p_2p5()
                 .rounded(cx.theme().radius)
-                .border_1()
-                .border_color(if active {
-                    cx.theme().primary
-                } else {
-                    cx.theme().border
-                })
-                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(title))
+                .when(active, |this| this.bg(cx.theme().primary.opacity(0.12)))
+                .hover(|s| s.bg(cx.theme().list_hover))
                 .child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(text),
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .gap_0p5()
+                        .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(title))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(text),
+                        ),
                 )
+                .when(active, |this| {
+                    this.child(
+                        Icon::new(IconName::Check)
+                            .size_4()
+                            .text_color(cx.theme().link),
+                    )
+                })
                 .on_click(move |_, window, cx| {
                     own.update(cx, |input, cx| input.set_value("", window, cx));
                     chat.update(cx, |this, cx| {
@@ -2278,7 +2304,7 @@ fn naming_section(
                 }),
         );
     }
-    section.child(
+    section.child(group).child(
         v_flex()
             .gap_1()
             .child(

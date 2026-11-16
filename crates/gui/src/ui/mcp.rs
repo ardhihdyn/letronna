@@ -292,9 +292,13 @@ fn server_row(
         .child(div().ml_1().child(switch));
     v_flex()
         .gap_1p5()
+        .px_4()
         .py_3()
-        .border_b_1()
+        .mb_2()
+        .rounded(cx.theme().radius_lg)
+        .border_1()
         .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
         .child(
             h_flex()
                 .items_center()

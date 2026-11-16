@@ -881,8 +881,10 @@ impl Chat {
             .w_full()
             .gap_2()
             .p_3()
-            .rounded(cx.theme().radius)
-            .bg(cx.theme().secondary.opacity(0.3))
+            .rounded(cx.theme().radius_lg)
+            .border_1()
+            .border_color(cx.theme().border)
+            .bg(cx.theme().secondary)
             .child(
                 h_flex()
                     .w_full()

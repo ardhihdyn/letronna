@@ -5112,8 +5112,9 @@ impl Render for Chat {
                 // than the greeting of a new session.
                 div().flex_1().into_any_element()
             } else {
+                // Drawn below, once the composer it centres is built.
                 empty_chat = true;
-                self.empty_state(window, cx).into_any_element()
+                div().into_any_element()
             }
         } else {
             // A menu a turn opened takes the focus from inside that turn. That
@@ -5190,6 +5191,28 @@ impl Render for Chat {
         let strip = (self.page == Page::Chat)
             .then(|| self.running_strip(window, cx))
             .flatten();
+        let dock = v_flex()
+            .w(column)
+            .mx_auto()
+            .px_6()
+            .pb_2()
+            .children(self.busy_note(cx))
+            .children(self.goal_line(cx))
+            .children(strip)
+            .children(self.crew_chip(cx))
+            .child(self.composer(pane < px(600.), cx));
+        // A new session opens on the composer in the middle, under the
+        // greeting, with ways to start below it; the first message sends it
+        // down to its place under the conversation.
+        let (body, dock) = if empty_chat && self.page == Page::Chat {
+            (
+                self.empty_state(dock.into_any_element(), window, cx)
+                    .into_any_element(),
+                None,
+            )
+        } else {
+            (body, Some(dock))
+        };
         let main = v_flex()
             .relative()
             .flex_1()
@@ -5213,18 +5236,7 @@ impl Render for Chat {
                 this.on_drop(cx.listener(|this, dropped: &ExternalPaths, window, cx| {
                     this.attach_dropped(dropped.paths().to_vec(), window, cx)
                 }))
-                .child(
-                    v_flex()
-                        .w(column)
-                        .mx_auto()
-                        .px_6()
-                        .pb_2()
-                        .children(self.busy_note(cx))
-                        .children(self.goal_line(cx))
-                        .children(strip)
-                        .children(self.crew_chip(cx))
-                        .child(self.composer(pane < px(600.), cx)),
-                )
+                .children(dock)
             })
             .child(self.status_bar(pane, cx))
             // The chat draws its own over the conversation; a page has

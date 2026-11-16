@@ -1906,6 +1906,7 @@ impl Chat {
 
     pub(crate) fn empty_state(
         &self,
+        composer: AnyElement,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -1954,17 +1955,6 @@ impl Chat {
                         crate::ui::motion::rise,
                     ),
             )
-            .child(
-                div()
-                    .relative()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(self.greeting)
-                    .with_animation(
-                        "empty-line",
-                        crate::ui::motion::enter(LINE_IN),
-                        crate::ui::motion::rise,
-                    ),
-            )
             .when(no_project, |this| {
                 this.child(
                     Button::new("choose-project")
@@ -1978,6 +1968,21 @@ impl Chat {
                         ),
                 )
             })
+            // The composer itself, in the middle, then ways to start.
+            .child(
+                div()
+                    .w_full()
+                    .max_w(COLUMN)
+                    .mt_6()
+                    .relative()
+                    .child(composer)
+                    .with_animation(
+                        "empty-composer",
+                        crate::ui::motion::enter(LINE_IN + std::time::Duration::from_millis(80)),
+                        crate::ui::motion::rise,
+                    ),
+            )
+            .child(self.starters(cx))
             .children(self.continue_last(window, cx))
             // A side question asked before anything else still needs somewhere to show.
             .children(
@@ -1991,6 +1996,73 @@ impl Chat {
                 .overflow_y_scroll()
                 .child(page),
         )
+    }
+
+    /// Ways to start a session: a few rounded chips under the composer,
+    /// each putting its prompt in the composer to be finished and sent.
+    fn starters(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        const STARTERS: [(&str, AppIcon, &str); 4] = [
+            ("Fix a bug", AppIcon::Alert, "Find and fix the bug where "),
+            (
+                "Explain this project",
+                AppIcon::FileText,
+                "Explain how this project is laid out and how its parts fit together.",
+            ),
+            ("Write tests", AppIcon::Checklist, "Write tests for "),
+            (
+                "Review my changes",
+                AppIcon::Branch,
+                "Review the changes I have not committed yet and point out anything wrong.",
+            ),
+        ];
+        let theme = cx.theme();
+        let (border, muted, link, hover) = (
+            theme.border,
+            theme.muted_foreground,
+            theme.link,
+            theme.list_hover,
+        );
+        h_flex()
+            .relative()
+            .flex_wrap()
+            .justify_center()
+            .gap_2()
+            .mt_4()
+            .px_6()
+            .children(
+                STARTERS
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (label, icon, prompt))| {
+                        h_flex()
+                            .id(("starter", i))
+                            .h(px(32.))
+                            .px_3()
+                            .gap_1p5()
+                            .items_center()
+                            .rounded_full()
+                            .border_1()
+                            .border_color(border)
+                            .cursor_pointer()
+                            .text_sm()
+                            .text_color(muted)
+                            .hover(move |s| s.bg(hover).text_color(link))
+                            .child(Icon::new(icon).size_3p5().text_color(link))
+                            .child(label)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.composer.update(cx, |input, cx| {
+                                    input.set_value(prompt, window, cx);
+                                    input.focus(window, cx);
+                                });
+                                cx.notify();
+                            }))
+                    }),
+            )
+            .with_animation(
+                "empty-starters",
+                crate::ui::motion::enter(LINE_IN + std::time::Duration::from_millis(200)),
+                crate::ui::motion::rise,
+            )
     }
 
     /// One quiet line back to the last session, under a new session's

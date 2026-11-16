@@ -1344,25 +1344,45 @@ impl Chat {
             // While a reply runs, sending queues the message for its next
             // step, as in Claude Code, rather than doing nothing; with the
             // reply in another session, it runs beside it.
-            .child(
-                Button::new("send")
-                    .primary()
-                    .xsmall()
+            // The brand's blue glows round the send button once there is
+            // something to send.
+            .child({
+                let ready = !(self.composer_empty && self.attached().is_empty());
+                let glow = cx.theme().primary;
+                div()
                     .rounded_full()
-                    .icon(Icon::new(IconName::ArrowUp))
-                    .tooltip(if self.run_holds_open() {
-                        "Send once this run is done (Enter)"
-                    } else if self.busy && self.busy_elsewhere().is_none() {
-                        "Send after this step (Enter)"
-                    } else {
-                        "Send (Enter)"
+                    .when(ready, |this| {
+                        this.shadow(vec![gpui::BoxShadow {
+                            color: glow.opacity(0.45),
+                            offset: gpui::point(px(0.), px(2.)),
+                            blur_radius: px(12.),
+                            spread_radius: px(1.),
+                            inset: false,
+                        }])
                     })
-                    .disabled(self.composer_empty && self.attached().is_empty())
-                    .on_click(cx.listener(|this, _, window, cx| this.send(window, cx))),
-            );
+                    .child(
+                        Button::new("send")
+                            .primary()
+                            .xsmall()
+                            .rounded_full()
+                            .icon(Icon::new(IconName::ArrowUp))
+                            .tooltip(if self.run_holds_open() {
+                                "Send once this run is done (Enter)"
+                            } else if self.busy && self.busy_elsewhere().is_none() {
+                                "Send after this step (Enter)"
+                            } else {
+                                "Send (Enter)"
+                            })
+                            .disabled(self.composer_empty && self.attached().is_empty())
+                            .on_click(cx.listener(|this, _, window, cx| this.send(window, cx))),
+                    )
+            });
         // Narrow, or a message past a line, the text takes the whole width
         // and the controls go under it, rather than the text being squeezed
         // to a few words a line beside them.
+        // While a turn works here, the composer's edge takes the brand's
+        // blue and breathes a soft glow, so the window says it is busy.
+        let working = self.busy && self.busy_elsewhere().is_none();
         let stacked = compact || {
             let text = self.composer.read(cx).value();
             text.contains('\n') || text.chars().count() > 60
@@ -1378,7 +1398,11 @@ impl Chat {
         // shadow over the page.
         .rounded(COMPOSER_RADIUS)
         .border_1()
-        .border_color(cx.theme().border)
+        .border_color(if working {
+            cx.theme().primary.opacity(0.45)
+        } else {
+            cx.theme().border
+        })
         .bg(cx.theme().secondary)
         .shadow_lg()
         .px_2p5()
@@ -1399,6 +1423,30 @@ impl Chat {
             )
         } else {
             frame.child(attach).child(input.flex_1()).child(controls)
+        };
+        let glow = cx.theme().primary;
+        let frame = if working && !cx.reduce_motion() {
+            frame
+                .with_animation(
+                    "composer-working",
+                    Animation::new(std::time::Duration::from_millis(2200))
+                        .repeat()
+                        .with_easing(gpui::ease_in_out),
+                    move |el, t| {
+                        // Up and back down once a round.
+                        let breath = 1. - (2. * t - 1.).abs();
+                        el.shadow(vec![gpui::BoxShadow {
+                            color: glow.opacity(0.10 + 0.22 * breath),
+                            offset: gpui::point(px(0.), px(4.)),
+                            blur_radius: px(18. + 10. * breath),
+                            spread_radius: px(0.),
+                            inset: false,
+                        }])
+                    },
+                )
+                .into_any_element()
+        } else {
+            frame.into_any_element()
         };
         v_flex()
             .relative()

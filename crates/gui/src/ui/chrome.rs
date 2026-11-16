@@ -65,12 +65,15 @@ impl Chat {
                             ))
                             .child(
                                 div()
-                                    .text_sm()
-                                    .font_family(HEADING_FONT)
-                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_base()
+                                    .font_family(WORDMARK_FONT)
+                                    .font_weight(FontWeight::SEMIBOLD)
                                     .child("Letronna"),
                             ),
                     )
+                    // The session in the middle of the bar, its model under
+                    // it, as the phone heads a chat.
+                    .child(self.bar_title(cx))
                     .child(
                         h_flex()
                             .flex_1()
@@ -99,6 +102,46 @@ impl Chat {
                                     .child(name)
                             }))
                             .child(no_drag(self.account_chip(cx))),
+                    ),
+            )
+    }
+
+    /// The bar's middle: the open session's title, and the model that
+    /// answers there, in a narrow line under it. Drawn over the bar, so it
+    /// stays in the window's middle whatever the two sides hold.
+    fn bar_title(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let active = self.store.active;
+        let title = self.store.conversations[active].title.trim();
+        let title: SharedString = if title.is_empty() {
+            "New session".into()
+        } else {
+            title.to_owned().into()
+        };
+        let model: SharedString = self.store.model(active).1.to_owned().into();
+        div()
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                v_flex()
+                    .max_w(px(360.))
+                    .items_center()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .truncate()
+                            .child(title),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .line_height(px(14.))
+                            .text_color(cx.theme().muted_foreground)
+                            .truncate()
+                            .child(model),
                     ),
             )
     }

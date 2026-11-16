@@ -82,34 +82,57 @@ impl Chat {
         };
         let up = at.checked_sub(1).and_then(|up| handles.get(up)).cloned();
         let down = handles.get(at + 1).cloned();
-        h_flex()
+        let row = h_flex()
             .id(("nav", nav.slot()))
             .track_focus(&handles[at])
-            .h(px(34.))
-            .px_2p5()
-            .gap_2p5()
             .items_center()
-            .rounded(theme.radius)
             // Always there, so the ring the keys bring moves nothing.
             .border_1()
             .border_color(theme.transparent)
             .cursor_pointer()
-            .font_family(HEADING_FONT)
-            .font_weight(FontWeight::MEDIUM)
             .text_color(theme.sidebar_foreground)
-            .when(active, |this| this.bg(accent))
-            .when(!active, |this| {
-                this.hover(move |s| s.bg(accent.opacity(0.5)))
-            })
-            .focus(|s| s.border_color(ring))
-            .active(|s| s.bg(accent.opacity(0.6)))
-            .child(icon.size_4().text_color(muted))
-            .child(div().flex_1().min_w_0().truncate().child(label))
-            .when(nav == Nav::New, |this| {
-                this.children(
-                    crate::ui::keys::bound_key(&NewSession, cx).map(|key| Kbd::new(key).text_xs()),
-                )
-            })
+            .focus(|s| s.border_color(ring));
+        let row = match nav {
+            // The drawer's one big button, as the phone's New chat: a filled
+            // pill across the top.
+            Nav::New => row
+                .h(px(38.))
+                .px_3()
+                .gap_2()
+                .rounded_full()
+                .bg(theme.foreground)
+                .text_color(theme.background)
+                .font_family(HEADING_FONT)
+                .font_weight(FontWeight::MEDIUM)
+                .hover(|s| s.opacity(0.9))
+                .active(|s| s.opacity(0.75))
+                .child(icon.size_4())
+                .child(div().flex_1().min_w_0().truncate().child(label))
+                .children(
+                    crate::ui::keys::bound_key(&NewSession, cx)
+                        .map(|key| Kbd::new(key).text_xs().opacity(0.7)),
+                ),
+            // A page is an icon in the dock at the drawer's foot, named
+            // under the pointer; the sessions have the room.
+            Nav::Page(_) => row
+                .size(px(30.))
+                .justify_center()
+                .rounded(theme.radius)
+                .when(active, |this| this.bg(accent))
+                .when(!active, |this| {
+                    this.hover(move |s| s.bg(accent.opacity(0.6)))
+                })
+                .active(|s| s.bg(accent.opacity(0.8)))
+                .tooltip(move |window, cx| {
+                    gpui_component::tooltip::Tooltip::new(label).build(window, cx)
+                })
+                .child(icon.size_4().text_color(if active {
+                    theme.sidebar_foreground
+                } else {
+                    muted
+                })),
+        };
+        row
             // As on a session row, a press leaves the keys where they were;
             // Tab or Up and Down are what put them here.
             .on_any_mouse_down(|_, window, _| window.prevent_default())
@@ -547,9 +570,14 @@ impl Chat {
                     .clone()
             })
             .collect();
-        let mut nav = v_flex().px_2().pt_2().gap_0p5();
+        let mut new = div().px_3().pt_3();
+        let mut dock = h_flex().justify_between().px_2().py_2();
         for (at, &row) in rows.iter().enumerate() {
-            nav = nav.child(self.nav_item(row, at, &handles, cx));
+            let item = self.nav_item(row, at, &handles, cx);
+            match row {
+                Nav::New => new = new.child(item),
+                Nav::Page(_) => dock = dock.child(item),
+            }
         }
         let visible = self.visible_sessions(cx);
         let keyed = self
@@ -716,26 +744,27 @@ impl Chat {
             .text_color(cx.theme().sidebar_foreground)
             .border_r(px(3.))
             .border_color(cx.theme().sidebar_border)
-            .child(nav)
+            .child(new)
             .child(
-                div().px_2().pt_3().child(
+                div().px_3().pt_3().child(
                     Input::new(&self.search)
                         .xsmall()
-                        .h(px(28.))
-                        .px_2()
+                        .h(px(32.))
+                        .px_3()
+                        .rounded_full()
+                        .bg(cx.theme().sidebar_accent.opacity(0.5))
                         .appearance(false)
                         .prefix(
                             Icon::new(AppIcon::Search)
                                 .size_3()
                                 .text_color(cx.theme().muted_foreground),
-                        ),
+                        )
+                        .suffix(self.session_filter_button(cx)),
                 ),
             )
-            .child(div().pt_1().child(if self.selecting() {
-                self.selection_bar(cx).into_any_element()
-            } else {
-                self.session_filter_row(cx).into_any_element()
-            }))
+            .when(self.selecting(), |this| {
+                this.child(div().pt_1().child(self.selection_bar(cx)))
+            })
             .child(
                 v_flex()
                     .id("session-list")
@@ -750,12 +779,16 @@ impl Chat {
                         v_flex()
                             .flex_shrink_0()
                             .children(self.runs_section(cx))
-                            .child(self.section("Sessions", cx))
                             .child(sessions)
                             .children(self.message_hits(cx)),
                     ),
             )
-            .children(self.grain(&self.grains.sidebar))
+            .child(
+                div()
+                    .border_t_1()
+                    .border_color(cx.theme().sidebar_accent)
+                    .child(dock),
+            )
             .children(self.ring(crate::ui::keys::Region::Sidebar, cx))
             .children(self.open_session_menu_layer())
     }

@@ -582,6 +582,8 @@ pub(crate) struct Chat {
     /// long as the window is open; see `ui::added`.
     pub(crate) added: std::collections::HashMap<u64, Vec<PathBuf>>,
     pub(crate) error: Option<String>,
+    /// The toast over the chat; see `ui::toast`.
+    pub(crate) toast: Option<crate::ui::toast::Toast>,
     /// Where updating stands, for the About page and the status bar.
     pub(crate) updating: crate::ui::update::Updating,
     /// A passing note for the next time the window draws: a new version, or
@@ -1218,6 +1220,7 @@ impl Chat {
                 .or(skills_error)
                 .or_else(letronna_core::vault::trouble),
             updating: Default::default(),
+            toast: None,
             note: None,
             hook_note: None,
             plugin_ui: Default::default(),
@@ -5022,60 +5025,17 @@ impl Render for Chat {
         // turn runs or one works.
         self.watch_helpers(cx);
         if let Some(note) = self.note.take() {
-            window.push_notification(gpui_component::notification::Notification::info(note), cx);
+            self.toast(note, crate::ui::toast::Kind::Info, cx);
         }
         if let Some(note) = self.loop_note.take() {
-            window.push_notification(gpui_component::notification::Notification::info(note), cx);
+            self.toast(note, crate::ui::toast::Kind::Info, cx);
         }
         if let Some(note) = self.hook_note.take() {
-            window.push_notification(
-                gpui_component::notification::Notification::warning(note),
-                cx,
-            );
+            self.toast(note, crate::ui::toast::Kind::Warning, cx);
         }
         self.plugin_toasts(window, cx);
         if let Some(error) = self.error.take() {
-            let text = error.clone();
-            window.push_notification(
-                gpui_component::notification::Notification::error(error)
-                    .action(move |_, window, cx| {
-                        let text = text.clone();
-                        let copied = window.use_keyed_state("copied-error", cx, |_, _| false);
-                        let done = *copied.read(cx);
-                        Button::new("copy-error")
-                            .plain(cx)
-                            .xsmall()
-                            .icon(Icon::new(if done {
-                                IconName::Check
-                            } else {
-                                IconName::Copy
-                            }))
-                            .tooltip("Copy message")
-                            .on_click(move |_, _, cx| {
-                                cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
-                                copied.update(cx, |c, cx| {
-                                    *c = true;
-                                    cx.notify();
-                                });
-                                let copied = copied.clone();
-                                cx.spawn(async move |cx| {
-                                    cx.background_executor()
-                                        .timer(std::time::Duration::from_secs(2))
-                                        .await;
-                                    copied.update(cx, |c, cx| {
-                                        *c = false;
-                                        cx.notify();
-                                    });
-                                })
-                                .detach();
-                            })
-                    })
-                    // After the copy button, which would otherwise keep it up
-                    // until closed: it goes on its own, held while the pointer
-                    // is on it so there is time to copy it.
-                    .autohide(true),
-                cx,
-            );
+            self.toast(error, crate::ui::toast::Kind::Error, cx);
         }
         let active = self.store.active;
         let conversation = &self.store.conversations[active];
@@ -5251,7 +5211,8 @@ impl Render for Chat {
             // nowhere else to show that F6 put the keys on it.
             .when(self.page != Page::Chat, |this| {
                 this.children(self.ring(crate::ui::keys::Region::Transcript, cx))
-            });
+            })
+            .children(self.toast_layer(cx));
 
         let sidebar_in =
             (self.motion.sidebar).track(self.sidebar_open, crate::ui::motion::STANDARD, window, cx);

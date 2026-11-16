@@ -110,6 +110,7 @@ pub(crate) enum AppIcon {
     Sparkles,
     /// Letronna's star and crescent, the phone's mark.
     Mark,
+    ListFilter,
     MessageSquare,
     File,
     FileText,
@@ -163,6 +164,7 @@ impl IconNamed for AppIcon {
             AppIcon::Mic => "icons/mic.svg",
             AppIcon::Sparkles => "icons/sparkles.svg",
             AppIcon::Mark => "icons/mark.svg",
+            AppIcon::ListFilter => "icons/list-filter.svg",
             AppIcon::MessageSquare => "icons/message-square.svg",
             AppIcon::File => "icons/file.svg",
             AppIcon::FileText => "icons/file-text.svg",

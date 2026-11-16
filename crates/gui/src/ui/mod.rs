@@ -46,6 +46,7 @@ pub(crate) mod shell;
 pub(crate) mod sidebar;
 pub(crate) mod skills;
 pub(crate) mod switcher;
+pub(crate) mod toast;
 pub(crate) mod typed;
 pub(crate) mod update;
 pub(crate) mod usage;

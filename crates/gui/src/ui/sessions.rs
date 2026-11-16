@@ -370,6 +370,7 @@ impl Chat {
         } else {
             "Select"
         };
+        let shared = letronna_core::share::shared_as(id).is_some();
         move |menu, _, _| {
             let item =
                 |label: &'static str,
@@ -386,7 +387,8 @@ impl Chat {
                         },
                     )
                 };
-            menu.min_w(px(200.))
+            let menu = menu
+                .min_w(px(200.))
                 .item(item("Rename", AppIcon::Pencil, Chat::rename_session))
                 .item(item("Name it again", AppIcon::Sparkles, Chat::name_again))
                 .item(item(
@@ -401,6 +403,26 @@ impl Chat {
                 ))
                 .item(item("Decisions", AppIcon::Shield, Chat::show_decisions))
                 .separator()
+                .item(item(
+                    if shared {
+                        "Update shared link"
+                    } else {
+                        "Share link"
+                    },
+                    AppIcon::PopOut,
+                    Chat::share_session,
+                ));
+            let menu = if shared {
+                menu.item(item(
+                    "Copy shared link",
+                    AppIcon::FileText,
+                    Chat::copy_shared_link,
+                ))
+                .item(item("Stop sharing", AppIcon::Stop, Chat::stop_sharing))
+            } else {
+                menu
+            };
+            menu.separator()
                 .item(item(
                     "Copy as Markdown",
                     AppIcon::FileText,

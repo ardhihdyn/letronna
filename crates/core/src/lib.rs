@@ -102,6 +102,7 @@ mod requirements;
 pub mod retry;
 pub mod review;
 pub mod sandbox;
+pub mod share;
 mod scan;
 pub mod schedule;
 #[cfg(feature = "workflows")]

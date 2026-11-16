@@ -16,6 +16,7 @@ This file is also the App tab of https://letronna.ai/changelog.
 ## [1.0.0] - 2026-11-16
 
 ### Added
+- **App:** Share link, in a session's menu: anyone with the link reads the session at letronna.ai/s/… and can bring it into Letronna with Open shared link on the Import page. Only what was asked and the replies are shared, never commands or file contents; Stop sharing turns the link off.
 - **App:** Save as web page, in a session's menu: the session as one page to open in any browser or send on, light and dark, with the steps between replies counted rather than shown.
 - **App** — Settings › Import scans this computer for sessions from Claude Code, Codex, Cursor, Gemini CLI, opencode and the others, one section a tool, and brings one in to carry on here. `/import` and the palette open it too. The originals are only read.
 - **App** — Checkpoints, beside the chat: each turn that changed files in the project, newest first, with what was asked and which files. Restore to before this asks once more, then puts every file changed from that turn on back as it was, keeping the conversation and telling the model.

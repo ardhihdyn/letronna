@@ -43,6 +43,7 @@ pub(crate) mod schedules;
 pub(crate) mod search;
 pub(crate) mod sessions;
 pub(crate) mod settings;
+pub(crate) mod share_link;
 pub(crate) mod share_page;
 pub(crate) mod setup;
 pub(crate) mod shell;

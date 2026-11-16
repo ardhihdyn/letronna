@@ -142,6 +142,15 @@ impl Chat {
             .disabled(self.imports.scanning)
             .on_click(cx.listener(|this, _, _, cx| this.scan_imports(cx)))
             .into_any_element();
+        // A session someone shared by link, from the clipboard (share_link.rs).
+        let link = Button::new("import-link")
+            .framed(cx)
+            .small()
+            .icon(Icon::new(AppIcon::PopIn))
+            .label("Open shared link")
+            .tooltip("Copy a letronna.ai/s/… link, then click to bring that session in")
+            .on_click(cx.listener(|this, _, window, cx| this.open_shared_link(window, cx)))
+            .into_any_element();
         let chip = |id: usize, label: String, on: bool, pick: Option<Tool>| {
             Button::new(("import-src", id))
                 .small()
@@ -309,7 +318,7 @@ impl Chat {
                     .pt_6()
                     .pb_4()
                     .gap_4()
-                    .child(super::page_header("Import", blurb, [scan], cx))
+                    .child(super::page_header("Import", blurb, [link, scan], cx))
                     .when(!found.is_empty(), |d| d.child(chips)),
             )
             .child(

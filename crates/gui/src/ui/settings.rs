@@ -34,6 +34,32 @@ pub(crate) const PAGES: &[(&str, AppIcon)] = &[
     ("About", AppIcon::Info),
 ];
 
+/// The widest the settings sheet grows, and its corners.
+const SHEET_WIDTH: f32 = 1000.;
+const SHEET_RADIUS: f32 = 22.;
+
+/// The colour of a settings page's icon tile, as a phone's settings give
+/// each row its own.
+fn tile_colour(page: &str) -> Hsla {
+    let hex = match page {
+        "Account" => 0x2f6bff,
+        "Usage" => 0x8e5cf7,
+        "Accounts" => 0x1fa971,
+        "Search" => 0x0ea5e9,
+        "Model" => 0x3d5afe,
+        "On this computer" => 0x64748b,
+        "Appearance" => 0xec4899,
+        "Thinking" => 0xf59e0b,
+        "Memory" => 0x14b8a6,
+        "Privacy" => 0x475569,
+        "Permissions" => 0xef4444,
+        "Wallet" => 0x10b981,
+        "Shortcuts" => 0x6366f1,
+        _ => 0x94a3b8,
+    };
+    gpui::rgb(hex).into()
+}
+
 /// How far down the window toasts start: below settings' close button and
 /// its focus ring, past settings' 44px margin and the button's row, 12px
 /// in and 20px tall. At gpui-component's 50px an error covered both.
@@ -1019,8 +1045,13 @@ impl Chat {
                 if closing { "panel-out" } else { "panel-in" },
                 anim(),
                 move |el, delta| {
-                    let p = if closing { 1. - delta } else { delta };
-                    el.opacity(p).mt(px(-crate::ui::motion::RISE * (1. - p)))
+                    // Up from below as a sheet, settling with a little give.
+                    if closing {
+                        el.opacity(1. - delta).mt(px(24. * delta))
+                    } else {
+                        let p = crate::ui::motion::overshoot(delta);
+                        el.opacity(delta).mt(px(40. * (1. - p)))
+                    }
                 },
             );
         Some(
@@ -1093,10 +1124,10 @@ impl Chat {
                 .h_full()
                 .flex_shrink_0()
                 .gap_0p5()
-                .p_3()
+                .px_3()
+                .pb_3()
+                .pt_2()
                 .bg(cx.theme().sidebar)
-                .border_r_1()
-                .border_color(cx.theme().border)
                 .key_context("SettingsNav")
                 .on_action(move |_: &PreviousSettingsPage, window, cx| back(false, window, cx))
                 .on_action(move |_: &NextSettingsPage, window, cx| step(true, window, cx)),
@@ -1104,15 +1135,36 @@ impl Chat {
                 let page = page.clone();
                 let chat = chat.clone();
                 let active = *name == current_page;
+                // The groups the pages fall in, as a phone's settings list
+                // them, each under a small label.
+                let label = match *name {
+                    "Account" => Some("You"),
+                    "Accounts" => Some("Models"),
+                    "Appearance" => Some("App"),
+                    "Privacy" => Some("Safety"),
+                    "Shortcuts" => Some("More"),
+                    _ => None,
+                };
+                let tile = tile_colour(name);
+                let nav = nav.children(label.map(|label| {
+                    div()
+                        .px_2()
+                        .pt_3()
+                        .pb_1()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(cx.theme().muted_foreground)
+                        .child(label.to_uppercase())
+                }));
                 nav.child(
                     h_flex()
                         .id(*name)
                         .track_focus(focus)
-                        .h(px(30.))
-                        .px_2()
-                        .gap_2()
+                        .h(px(34.))
+                        .px_1p5()
+                        .gap_2p5()
                         .items_center()
-                        .rounded(cx.theme().radius)
+                        .rounded(px(9.))
                         // Always there, so the ring the keys bring moves
                         // nothing.
                         .border_1()
@@ -1125,9 +1177,15 @@ impl Chat {
                         .focus(|s| s.border_color(cx.theme().ring))
                         .active(|s| s.bg(cx.theme().sidebar_accent.opacity(0.6)))
                         .child(
-                            Icon::new(*icon)
-                                .size_4()
-                                .text_color(cx.theme().muted_foreground),
+                            div()
+                                .size(px(22.))
+                                .flex_shrink_0()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded(px(6.))
+                                .bg(tile)
+                                .child(Icon::new(*icon).size_3p5().text_color(gpui::white())),
                         )
                         .child(*name)
                         .on_click(move |_, _, cx| show_page(name, &page, &chat, cx)),
@@ -1227,18 +1285,21 @@ impl Chat {
                 .into_any_element()
             }
         };
+        // A sheet over the window: no wider than reads well, with the
+        // phone's round corners and a deep shadow.
         keeps_keys(div(), &self.settings_focus)
-            .w(vp.width - gap * 2.)
+            .w((vp.width - gap * 2.).min(px(SHEET_WIDTH)))
             .bg(cx.theme().background)
             .border_1()
             .border_color(cx.theme().border)
-            .rounded(cx.theme().radius_lg)
+            .rounded(px(SHEET_RADIUS))
+            .shadow_2xl()
             .child(
                 h_flex()
                     .h(height)
                     .items_start()
                     .overflow_hidden()
-                    .rounded(cx.theme().radius_lg)
+                    .rounded(px(SHEET_RADIUS))
                     .child(nav)
                     .child(
                         div()
@@ -1253,9 +1314,9 @@ impl Chat {
                                     .track_scroll(&body_scroll)
                                     .size_full()
                                     .overflow_y_scroll()
-                                    .px_8()
-                                    .py_6()
-                                    .child(div().child(body).with_animation(
+                                    .px_10()
+                                    .py_8()
+                                    .child(div().max_w(px(680.)).child(body).with_animation(
                                         SharedString::from(format!("page-{current_page}")),
                                         crate::ui::motion::enter(crate::ui::motion::QUICK),
                                         |el, delta| el.opacity(delta).mt(px(6. * (1. - delta))),

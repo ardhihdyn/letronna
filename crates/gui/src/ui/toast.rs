@@ -29,6 +29,9 @@ pub(crate) struct Toast {
     hovered: bool,
     leaving: bool,
     copied: bool,
+    /// Bumped each time the pointer lets go, so the line counting down
+    /// starts over from full.
+    round: u64,
 }
 
 impl Chat {
@@ -48,6 +51,7 @@ impl Chat {
             hovered: false,
             leaving: false,
             copied: false,
+            round: 0,
         });
         self.toast_timer(turn, STAY, cx);
         cx.notify();
@@ -98,30 +102,51 @@ impl Chat {
     pub(crate) fn toast_layer(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
         let toast = self.toast.as_ref()?;
         let theme = cx.theme();
-        let (icon, tint, headline) = match toast.kind {
-            Kind::Info => (IconName::Info, theme.primary, "Heads up"),
-            Kind::Warning => (IconName::TriangleAlert, theme.warning, "Check this"),
-            Kind::Error => (IconName::CircleX, theme.danger, "Something went wrong"),
+        let (icon, tint) = match toast.kind {
+            Kind::Info => (IconName::Info, theme.link),
+            Kind::Warning => (IconName::TriangleAlert, theme.warning),
+            Kind::Error => (IconName::CircleX, theme.danger),
         };
+        let (title, body) = headed(&toast.text, toast.kind);
         let text = toast.text.clone();
         let copied = toast.copied;
         let leaving = toast.leaving;
-        let turn = toast.turn;
+        let hovered = toast.hovered;
+        let (turn, round) = (toast.turn, toast.round);
         let muted = theme.muted_foreground;
-        let card = h_flex()
+        // The time left, as a line along the foot that runs out; held full
+        // while the pointer is on the card.
+        let countdown = div()
+            .h(px(2.))
+            .w_full()
+            .rounded_full()
+            .bg(tint.opacity(0.6));
+        let countdown = if hovered || leaving {
+            countdown.into_any_element()
+        } else {
+            countdown
+                .with_animation(
+                    ("toast-left", (turn * 1000 + round) as usize),
+                    Animation::new(STAY),
+                    |el, t| el.w(relative(1. - t)),
+                )
+                .into_any_element()
+        };
+        let card = v_flex()
             .id(("toast", turn as usize))
             .occlude()
             .relative()
-            .w(px(440.))
+            .overflow_hidden()
+            .w(px(400.))
             .max_w_full()
-            .gap_3()
-            .items_start()
-            .pl_3()
-            .pr_1p5()
-            .py_2p5()
-            .rounded(px(18.))
+            .gap_1()
+            .pl_4()
+            .pr_2()
+            .pt_2p5()
+            .pb_3p5()
+            .rounded(px(14.))
             .border_1()
-            .border_color(tint.opacity(0.45))
+            .border_color(theme.border)
             .bg(theme.popover)
             .shadow_xl()
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
@@ -130,44 +155,38 @@ impl Chat {
                     if !*hovered {
                         // Let go: the full stay again from here.
                         toast.since = Instant::now();
+                        toast.round += 1;
                         this.toast_timer(turn, STAY, cx);
                     }
+                    cx.notify();
                 }
             }))
+            // The kind's colour, as a strip down the left edge.
             .child(
                 div()
-                    .size(px(30.))
-                    .flex_shrink_0()
-                    .flex()
-                    .items_center()
-                    .justify_center()
+                    .absolute()
+                    .left(px(5.))
+                    .top(px(10.))
+                    .bottom(px(10.))
+                    .w(px(3.))
                     .rounded_full()
-                    .bg(tint)
-                    .child(Icon::new(icon).size_4().text_color(theme.background)),
-            )
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .gap_0p5()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(tint)
-                            .child(headline),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(theme.foreground)
-                            .line_clamp(3)
-                            .child(text.clone()),
-                    ),
+                    .bg(tint),
             )
             .child(
                 h_flex()
-                    .flex_shrink_0()
+                    .gap_2()
+                    .items_center()
+                    .child(Icon::new(icon).size_4().text_color(tint))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_sm()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(title),
+                    )
+                    .child(div().text_xs().text_color(muted).child("now"))
                     .child(
                         Button::new("toast-copy")
                             .ghost()
@@ -199,6 +218,24 @@ impl Chat {
                                 cx.notify();
                             })),
                     ),
+            )
+            .child(
+                div()
+                    .pl(px(24.))
+                    .pr_2()
+                    .text_sm()
+                    .text_color(muted)
+                    .line_clamp(3)
+                    .child(body),
+            )
+            // Inside the corners, so the line never runs past them.
+            .child(
+                div()
+                    .absolute()
+                    .left(px(16.))
+                    .right(px(16.))
+                    .bottom(px(5.))
+                    .child(countdown),
             );
         let card = if leaving {
             card.with_animation(
@@ -233,3 +270,39 @@ impl Chat {
 
 /// How far under the top of the chat the toast drops to.
 const TOAST_TOP: f32 = 12.;
+
+/// A toast's title and its body: what comes before the first ": " names
+/// where it came from ("Custom: Cannot load…"), and without one the kind
+/// says it.
+fn headed(text: &str, kind: Kind) -> (SharedString, SharedString) {
+    match text.split_once(": ") {
+        Some((from, rest)) if !from.is_empty() && from.len() <= 40 && !rest.is_empty() => {
+            (from.to_owned().into(), rest.to_owned().into())
+        }
+        _ => (
+            match kind {
+                Kind::Info => "Letronna",
+                Kind::Warning => "Worth a look",
+                Kind::Error => "That did not work",
+            }
+            .into(),
+            text.to_owned().into(),
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Kind, headed};
+
+    #[test]
+    fn a_source_before_the_colon_heads_the_toast_and_anything_else_is_its_body() {
+        let (title, body) = headed("Custom: Cannot load the model list.", Kind::Error);
+        assert_eq!(
+            (title.as_ref(), body.as_ref()),
+            ("Custom", "Cannot load the model list.")
+        );
+        let (title, body) = headed("Saved.", Kind::Info);
+        assert_eq!((title.as_ref(), body.as_ref()), ("Letronna", "Saved."));
+    }
+}

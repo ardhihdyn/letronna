@@ -1061,6 +1061,7 @@ mod tests {
     fn every_page_has_a_row_with_workflows_only_while_runs_show() {
         let mut all = vec![
             "New session",
+            "Tasks",
             "Capabilities",
             "Activity",
             "Plugins",

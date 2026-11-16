@@ -16,6 +16,10 @@ This file is also the App tab of https://letronna.ai/changelog.
 ## [1.0.0] - 2026-11-16
 
 ### Added
+- **App** — Checkpoints, beside the chat: each turn that changed files in the project, newest first, with what was asked and which files. Restore to before this asks once more, then puts every file changed from that turn on back as it was, keeping the conversation and telling the model.
+- **App** — A Tasks page lists every session's checklist by project: what is being done, what waits and how far along. A card opens its session.
+- **App** — Never allow, beside Always allow on the approval card: the call is denied and calls like it are refused in that project from then on. Settings › Permissions removes the rule.
+- **App** — Copy as Markdown in a session's menu puts the whole session on the clipboard, to paste to a teammate or into an issue.
 - **App** — A Work tab beside the chat shows what the agent does as it does it: each call of the turn, with an edit's lines or a command's output under the newest or the one clicked. It opens by itself when a turn starts calling tools in a window wide enough.
 - **App** — Ink, Night on true black for an OLED screen, and Sand, Paper warmed, join Night and Paper in Appearance.
 - **All** — Add from Hugging Face takes a link to a model's own page that has no GGUF file, such as `huggingface.co/LiquidAI/LFM3-1.7B`, and offers the files of a GGUF copy of it: its maker's own (`LiquidAI/LFM3-1.7B-GGUF`) first, or else the most downloaded copy that carries the model's name, never a fine-tune named otherwise. It says which repository the files are from, and when that is not the maker's.

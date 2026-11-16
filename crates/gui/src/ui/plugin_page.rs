@@ -601,9 +601,10 @@ impl Chat {
             .gap_4()
             .child(super::page_header(
                 "Plugins",
-                "A plugin brings skills, commands, styles, MCP servers and code in JavaScript \
-                 or Python in one git repository. It is checked before it is installed, and its \
-                 servers and code run only once you allow them.",
+                "Everything that extends Letronna, in one place: the integrations it comes with, \
+                 switched on or off, and plugins added from git -- skills, commands, styles, MCP \
+                 servers and code, checked before they are installed and run only once you \
+                 allow them.",
                 [],
                 cx,
             ))
@@ -628,18 +629,14 @@ impl Chat {
                             ),
                     ),
             )
+            .child(section_title("Built in", cx))
+            .child(self.built_in(cx))
+            .child(section_title("Added", cx))
             .children(note)
             .children(problem)
             .children(empty)
             .child(v_flex().gap_2().children(rows))
-            .child(
-                div()
-                    .pt_2()
-                    .text_base()
-                    .font_family(HEADING_FONT)
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("Marketplaces"),
-            )
+            .child(section_title("Marketplaces", cx))
             .child(
                 h_flex()
                     .gap_2()
@@ -680,6 +677,106 @@ impl Chat {
             .overflow_y_scroll()
             .child(page)
     }
+}
+
+impl Chat {
+    /// The integrations that come with the app, each switched on or off
+    /// here, with its own settings under it while on. A provider's account
+    /// is then set up in Settings › Accounts, like any other.
+    fn built_in(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let me = cx.entity().downgrade();
+        let theme = cx.theme();
+        let (muted, border, secondary, radius) = (
+            theme.muted_foreground,
+            theme.border,
+            theme.secondary,
+            theme.radius,
+        );
+        let tag = move |text: &'static str| {
+            div()
+                .text_xs()
+                .px_1p5()
+                .rounded(radius)
+                .bg(secondary)
+                .text_color(muted)
+                .child(text)
+        };
+        let mut list = v_flex()
+            .rounded(theme.radius_lg)
+            .border_1()
+            .border_color(border)
+            .overflow_hidden();
+        for (n, info) in crate::plugins::list(cx).into_iter().enumerate() {
+            let id = info.id;
+            let enabled = info.enabled;
+            let provider = info.provider;
+            let me = me.clone();
+            let row = h_flex()
+                .items_center()
+                .gap_3()
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .gap_0p5()
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(info.name),
+                                )
+                                .when(!info.builtin, |this| this.child(tag("External"))),
+                        )
+                        .child(div().text_xs().text_color(muted).child(info.description)),
+                )
+                .child(
+                    div().flex_shrink_0().cursor_pointer().child(
+                        super::settings::KeyedSwitch::new(SharedString::from(format!(
+                            "plugin-{id}"
+                        )))
+                        .checked(enabled)
+                        .on_click(move |_, window, cx| {
+                            crate::plugins::set_enabled(cx, id, !enabled);
+                            let _ = me.update(cx, |this, cx| {
+                                // Its provider's models join the list or leave it.
+                                if provider.is_some() {
+                                    this.load_models(window, cx);
+                                }
+                                cx.notify()
+                            });
+                        }),
+                    ),
+                );
+            let settings = if enabled {
+                crate::plugins::render_settings(cx, id)
+            } else {
+                None
+            };
+            list = list.child(
+                v_flex()
+                    .gap_2()
+                    .px_4()
+                    .py_3()
+                    .when(n > 0, |this| this.border_t_1().border_color(border))
+                    .child(row)
+                    .children(settings),
+            );
+        }
+        list
+    }
+}
+
+/// A heading between the page's parts.
+fn section_title(text: &'static str, cx: &App) -> impl IntoElement {
+    div()
+        .pt_2()
+        .text_xs()
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(cx.theme().muted_foreground)
+        .child(text.to_uppercase())
 }
 
 /// What allowing `plugin` lets happen, for the box that asks.

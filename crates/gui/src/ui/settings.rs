@@ -31,7 +31,6 @@ pub(crate) const PAGES: &[(&str, AppIcon)] = &[
     ("Permissions", AppIcon::Checklist),
     ("Wallet", AppIcon::Wallet),
     ("Shortcuts", AppIcon::Keyboard),
-    ("Plugins", AppIcon::Puzzle),
     ("About", AppIcon::Info),
 ];
 
@@ -1171,16 +1170,6 @@ impl Chat {
                 .into_any_element(),
             "Permissions" => self.permissions_page(cx).into_any_element(),
             "Shortcuts" => shortcuts_page(&hotkey, &chat, cx).into_any_element(),
-            "Plugins" => plugins_page(
-                self.gateway_rows(),
-                &pick,
-                &endpoint,
-                &key,
-                &page,
-                &chat,
-                cx,
-            )
-            .into_any_element(),
             "Wallet" => super::wallet::wallet_settings(&chat, &self.wallet, cx).into_any_element(),
             "Memory" => v_flex()
                 .gap_5()
@@ -1361,109 +1350,6 @@ fn show_page(name: &'static str, page: &Entity<&'static str>, chat: &Entity<Chat
             cx.notify();
         });
     }
-}
-
-fn plugins_page(
-    mut rows: Vec<GatewayRow>,
-    pick: &Entity<String>,
-    endpoint: &Entity<InputState>,
-    key: &Entity<InputState>,
-    page: &Entity<&'static str>,
-    chat: &Entity<Chat>,
-    cx: &App,
-) -> Div {
-    let mut list = v_flex();
-    for info in plugins::list(cx) {
-        let toggle = chat.clone();
-        let id = info.id;
-        let enabled = info.enabled;
-        let provider = info.provider;
-        let row = h_flex()
-            .items_center()
-            .justify_between()
-            .gap_3()
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .gap_0p5()
-                    .child(
-                        h_flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(info.name),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .px_1p5()
-                                    .rounded(cx.theme().radius)
-                                    .bg(cx.theme().secondary)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(if info.builtin { "Built in" } else { "External" }),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(info.description),
-                    ),
-            )
-            .child(
-                div().flex_shrink_0().cursor_pointer().child(
-                    KeyedSwitch::new(SharedString::from(format!("plugin-{id}")))
-                        .checked(enabled)
-                        .on_click(move |_, window, cx| {
-                            plugins::set_enabled(cx, id, !enabled);
-                            toggle.update(cx, |this, cx| {
-                                // Its provider's models join the list or leave it.
-                                if provider.is_some() {
-                                    this.load_models(window, cx);
-                                }
-                                cx.notify()
-                            });
-                        }),
-                ),
-            );
-        let settings = if enabled {
-            plugins::render_settings(cx, id)
-        } else {
-            None
-        };
-        // The provider it offers, with the row the Accounts page would give it.
-        let account = provider.filter(|_| enabled).map(|name| {
-            // Each of its accounts, the first and any added after it.
-            let (own, rest): (Vec<_>, Vec<_>) =
-                std::mem::take(&mut rows).into_iter().partition(|row| {
-                    letronna_core::providers::accounts::provider_of(row.name) == Some(name)
-                });
-            rows = rest;
-            gateway_list(own, pick, endpoint, key, page, chat, cx)
-        });
-        list = list.child(
-            v_flex()
-                .gap_2()
-                .py_3()
-                .border_b_1()
-                .border_color(cx.theme().border)
-                .child(row)
-                .children(settings)
-                .children(account),
-        );
-    }
-    v_flex()
-        .gap_4()
-        .child(heading(
-            "Plugins",
-            "Optional integrations. Toggle one off to unload it. Choices are saved in plugin-switches.json.",
-            cx,
-        ))
-        .child(list)
 }
 
 pub(crate) fn heading(title: &'static str, blurb: &'static str, cx: &App) -> Div {
@@ -4739,10 +4625,11 @@ fn add_tiles(
         let offered = row.offered;
         tiles = tiles.child(
             tile(i, row.name.into(), tag, on).on_click(move |_, window, cx| {
+                // Plugins are one page, outside Settings: there.
                 if !offered {
-                    return to.update(cx, |p, cx| {
-                        *p = "Plugins";
-                        cx.notify();
+                    return chat.update(cx, |this, cx| {
+                        this.close_settings(window, cx);
+                        this.open_page(Page::Plugins, window, cx);
                     });
                 }
                 if gname == LETRONNA {

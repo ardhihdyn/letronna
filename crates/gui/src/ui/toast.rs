@@ -252,7 +252,7 @@ impl Chat {
             card.with_animation(
                 ("toast-out", turn as usize),
                 crate::ui::motion::exit(MOVE),
-                |el, t| el.opacity(1. - t).top(px(-16. * t)),
+                |el, t| el.opacity(1. - t).left(px(24. * t)),
             )
             .into_any_element()
         } else {
@@ -261,7 +261,7 @@ impl Chat {
                 crate::ui::motion::enter(MOVE),
                 |el, t| {
                     let t = crate::ui::motion::overshoot(t);
-                    el.opacity(t.min(1.)).top(px(-24. * (1. - t)))
+                    el.opacity(t.min(1.)).left(px(40. * (1. - t)))
                 },
             )
             .into_any_element()
@@ -272,8 +272,8 @@ impl Chat {
                 .left_0()
                 .right_0()
                 .top(px(TOAST_TOP))
-                .justify_center()
-                .px_6()
+                .justify_end()
+                .px_4()
                 .child(card),
         )
     }

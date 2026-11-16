@@ -204,7 +204,10 @@ impl Chat {
         let page = match fix {
             Fix::Search => "Search",
             Fix::Account => "Account",
-            Fix::Plugins => "Plugins",
+            Fix::Plugins => {
+                self.open_page(Page::Plugins, window, cx);
+                return;
+            }
             Fix::Messaging => {
                 self.page = Page::Messaging;
                 self.focus_composer(window, cx);

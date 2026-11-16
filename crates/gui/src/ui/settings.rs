@@ -1785,7 +1785,7 @@ fn privacy_page(
             "Sessions stay on this computer until you delete them, unless you choose otherwise.",
             cx,
         ))
-        .child(keep_row(chat, keep_days, settings.keep_days, cx))
+        .child(card(keep_row(chat, keep_days, settings.keep_days, cx), cx))
         .child(heading(
             "Browser",
             "Each session browses in a browser of its own, as a separate agent would.",
@@ -1793,10 +1793,10 @@ fn privacy_page(
         ))
         .child(browser)
         .child(seen)
-        .child(elsewhere_row(chat, address, cx))
+        .child(card(elsewhere_row(chat, address, cx), cx))
         .child(heading(
             "Discord Rich Presence",
-            "What Letronna shares with Discord. The integration is turned on or off in the Plugins tab.",
+            "What Letronna shares with Discord. The integration is turned on or off on the Plugins page.",
             cx,
         ))
         .child(if enabled {
@@ -1808,7 +1808,7 @@ fn privacy_page(
                 .bg(cx.theme().secondary.opacity(0.3))
                 .text_sm()
                 .text_color(cx.theme().muted_foreground)
-                .child("Discord Rich Presence is off. Enable it in the Plugins tab to choose what to share.")
+                .child("Discord Rich Presence is off. Turn it on on the Plugins page to choose what to share.")
                 .into_any_element()
         })
 }
@@ -2063,7 +2063,7 @@ fn appearance_page(
         ),
     ];
 
-    let mut looks = v_flex().gap_2();
+    let mut looks = card(v_flex(), cx).p_1().gap_0p5();
     for (value, id, text) in LOOKS {
         let active = settings.appearance == value;
         // A tab stop of its own, so Tab reaches each choice and Enter or
@@ -2084,12 +2084,8 @@ fn appearance_page(
                 .gap_2p5()
                 .p_2p5()
                 .rounded(cx.theme().radius)
-                .border_1()
-                .border_color(if active {
-                    cx.theme().primary
-                } else {
-                    cx.theme().border
-                })
+                .when(active, |this| this.bg(cx.theme().primary.opacity(0.12)))
+                .hover(|s| s.bg(cx.theme().list_hover))
                 .focus(|s| s.border_color(cx.theme().ring))
                 .child(div().flex_1().min_w_0().text_sm().child(text))
                 // Paper's focus ring is its primary blue, so the chosen row
@@ -2099,6 +2095,13 @@ fn appearance_page(
                         Icon::new(IconName::Check)
                             .small()
                             .text_color(cx.theme().primary),
+                    )
+                })
+                .when(active, |this| {
+                    this.child(div().flex_1()).child(
+                        Icon::new(IconName::Check)
+                            .size_4()
+                            .text_color(cx.theme().link),
                     )
                 })
                 .on_click(move |_, window, cx| {
@@ -2144,7 +2147,7 @@ fn appearance_page(
             cx,
         ))
         .child(v_flex().gap_1().child(label("Theme", cx)).child(looks))
-        .child(text_size_row(chat, settings.text_step, cx))
+        .child(card(text_size_row(chat, settings.text_step, cx), cx))
         .child(grain)
         .child(motion)
 }
@@ -2314,7 +2317,7 @@ fn thinking_page(
     let auto = ("", "Whatever the model likes");
     let choices = offered.iter().map(|level| (&*level.id, &*level.label));
 
-    let mut levels = v_flex().gap_2();
+    let mut levels = card(v_flex(), cx).p_1().gap_0p5();
     for (at, (value, text)) in std::iter::once(auto).chain(choices).enumerate() {
         let active = sent.unwrap_or_default() == value;
         let (chat, value) = (chat.clone(), value.to_owned());
@@ -2326,13 +2329,16 @@ fn thinking_page(
                 .gap_2p5()
                 .p_2p5()
                 .rounded(cx.theme().radius)
-                .border_1()
-                .border_color(if active {
-                    cx.theme().primary
-                } else {
-                    cx.theme().border
-                })
+                .when(active, |this| this.bg(cx.theme().primary.opacity(0.12)))
+                .hover(|s| s.bg(cx.theme().list_hover))
                 .child(div().text_sm().child(text.to_owned()))
+                .when(active, |this| {
+                    this.child(div().flex_1()).child(
+                        Icon::new(IconName::Check)
+                            .size_4()
+                            .text_color(cx.theme().link),
+                    )
+                })
                 .on_click(move |_, _, cx| {
                     chat.update(cx, |this, cx| {
                         this.store.choose_effort(this.store.active, &value);
@@ -2369,7 +2375,7 @@ fn thinking_page(
         }
         (style.name, text)
     });
-    let mut styles = v_flex().gap_2();
+    let mut styles = card(v_flex(), cx).p_1().gap_0p5();
     for (at, (value, text)) in std::iter::once(default).chain(own).enumerate() {
         let active = current == value;
         let (chat, shown) = (chat.clone(), shown.clone());
@@ -2381,13 +2387,16 @@ fn thinking_page(
                 .gap_2p5()
                 .p_2p5()
                 .rounded(cx.theme().radius)
-                .border_1()
-                .border_color(if active {
-                    cx.theme().primary
-                } else {
-                    cx.theme().border
-                })
+                .when(active, |this| this.bg(cx.theme().primary.opacity(0.12)))
+                .hover(|s| s.bg(cx.theme().list_hover))
                 .child(div().text_sm().child(text))
+                .when(active, |this| {
+                    this.child(div().flex_1()).child(
+                        Icon::new(IconName::Check)
+                            .size_4()
+                            .text_color(cx.theme().link),
+                    )
+                })
                 .on_click(move |_, _, cx| {
                     chat.update(cx, |this, cx| {
                         this.store.choose_style(&value);
@@ -2603,7 +2612,7 @@ fn switch_row(
     cx: &App,
     turn: impl Fn(&mut App) + 'static,
 ) -> Div {
-    h_flex()
+    card(h_flex(), cx)
         .justify_between()
         .items_center()
         .gap_4()
@@ -2629,6 +2638,17 @@ fn switch_row(
                     .on_click(move |_, _, cx| turn(cx)),
             ),
         )
+}
+
+/// A setting's row as the phone draws it: on a raised, rounded card of
+/// its own, with room around what it holds.
+pub(crate) fn card(el: Div, cx: &App) -> Div {
+    el.px_4()
+        .py_3()
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().secondary)
 }
 
 /// What turning a switch does, given whether it is now on.
@@ -3348,7 +3368,7 @@ fn tool_search_section(
         "jev" | "names" => mode,
         _ => "auto",
     };
-    let mut ways = v_flex().gap_2();
+    let mut ways = card(v_flex(), cx).p_1().gap_0p5();
     for (at, (value, title, text)) in choices.into_iter().enumerate() {
         let active = mode == value;
         let chat = chat.clone();
@@ -3360,12 +3380,8 @@ fn tool_search_section(
                 .gap_2p5()
                 .p_2p5()
                 .rounded(cx.theme().radius)
-                .border_1()
-                .border_color(if active {
-                    cx.theme().primary
-                } else {
-                    cx.theme().border
-                })
+                .when(active, |this| this.bg(cx.theme().primary.opacity(0.12)))
+                .hover(|s| s.bg(cx.theme().list_hover))
                 .child(
                     v_flex()
                         .gap_0p5()
@@ -3377,6 +3393,13 @@ fn tool_search_section(
                                 .child(text),
                         ),
                 )
+                .when(active, |this| {
+                    this.child(div().flex_1()).child(
+                        Icon::new(IconName::Check)
+                            .size_4()
+                            .text_color(cx.theme().link),
+                    )
+                })
                 .on_click(move |_, _, cx| {
                     chat.update(cx, |this, cx| {
                         this.store.settings.tool_search = value.to_owned();

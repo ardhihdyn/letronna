@@ -316,6 +316,10 @@ impl Chat {
 
     /// The list over the composer, while there is one.
     pub(crate) fn completion_list(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
+        // Drawn over everything, so it would show through Settings' sheet.
+        if self.settings_open {
+            return None;
+        }
         let open = self.completer.open.as_ref()?;
         let muted = cx.theme().muted_foreground;
         let no_project = open.trigger == '@'

@@ -28,7 +28,11 @@ impl Chat {
         // 20px apart from x=12 end at 64, so leave the same 12px gap after them
         // that the other platforms have at the edge. Fullscreen hides the lights
         // and the bar adds that 12px by itself.
-        let inset = if window.is_fullscreen() {
+        // Only macOS draws its window buttons at the bar's left; Windows and
+        // Linux have theirs at the right, drawn by the bar itself.
+        let inset = if !cfg!(target_os = "macos") {
+            px(0.)
+        } else if window.is_fullscreen() {
             px(4.)
         } else {
             px(80.)
@@ -37,18 +41,27 @@ impl Chat {
         // now, even while it eases open or folds.
         let side = self.sidebar_drawn;
         let theme = cx.theme();
+        // Too narrow for the window buttons and the toggle -- the rail, or
+        // the sidebar on its way there -- the whole bar is the page's, and
+        // the rail starts under it.
+        let joined = side >= inset + px(36.) + px(3.) + px(52.);
         // No bar across the window: the sidebar's colour runs up to the top
-        // under the traffic lights and the toggle, and the chat's own header
+        // under the window buttons and the toggle, and the chat's own header
         // sits on the page beside it, with no line between them.
         TitleBar::new()
             .h(BAR_HEIGHT)
-            .bg(theme.sidebar)
+            .bg(if joined {
+                theme.sidebar
+            } else {
+                theme.background
+            })
             .border_b_0()
-            .when(cfg!(target_os = "macos"), |bar| bar.pl(inset))
+            .pl(inset)
             .child(
                 h_flex()
                     .flex_shrink_0()
-                    .w((side - inset - px(3.)).max(px(36.)))
+                    .when(joined, |this| this.w(side - inset - px(3.)))
+                    .when(!joined, |this| this.pl_2())
                     .justify_end()
                     .pr_2()
                     .child(no_drag(
@@ -78,8 +91,9 @@ impl Chat {
                     .pl_5()
                     .pr_3()
                     .bg(theme.background)
-                    .border_l(px(3.))
-                    .border_color(theme.sidebar_border)
+                    .when(joined, |this| {
+                        this.border_l(px(3.)).border_color(theme.sidebar_border)
+                    })
                     .child(self.bar_title(cx))
                     .child(no_drag(self.command_button(window, cx)))
                     .child(no_drag(

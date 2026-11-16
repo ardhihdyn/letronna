@@ -2277,7 +2277,7 @@ fn ends_thinking(event: &Event) -> bool {
 /// What a call to `tool` with `args` changes, when it is an edit: an
 /// edit_file's replacements compared line by line as the files card does,
 /// a written file's lines all added, a patch's own `+` and `-` lines.
-fn edited_by(tool: &str, args: &str) -> Option<Edited> {
+pub(crate) fn edited_by(tool: &str, args: &str) -> Option<Edited> {
     // Asked again at every frame of a call that is no edit, which is then
     // not worth parsing.
     if !matches!(tool, "edit_file" | "write_file" | "apply_patch") {

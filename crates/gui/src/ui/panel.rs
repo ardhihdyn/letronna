@@ -84,6 +84,8 @@ const PREVIEW_FOOTER: Pixels = px(22.);
 /// matches below.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum PanelTab {
+    /// What the agent does in the turn on screen, as it does it.
+    Work,
     Browser,
     Changes,
     Files,
@@ -94,7 +96,8 @@ pub(crate) enum PanelTab {
 
 impl PanelTab {
     /// The window's own tabs, in the order the bar shows them.
-    const OWN: [PanelTab; 4] = [
+    const OWN: [PanelTab; 5] = [
+        PanelTab::Work,
         PanelTab::Browser,
         PanelTab::Changes,
         PanelTab::Files,
@@ -115,6 +118,7 @@ impl PanelTab {
 
     fn label(self) -> String {
         match self {
+            PanelTab::Work => "Work".into(),
             PanelTab::Browser => "Browser".into(),
             PanelTab::Changes => "Changes".into(),
             PanelTab::Files => "Files".into(),
@@ -139,6 +143,9 @@ pub(crate) struct Panel {
     share: Option<f32>,
     /// The tab each session had open last, by session id.
     tabs: HashMap<u64, PanelTab>,
+    /// A turn has started working: the panel opens on Work at the next
+    /// draw, if the window is wide enough to dock it.
+    pub(crate) want_work: bool,
     /// The sessions whose browser shows as the preview at the chat's corner
     /// rather than beside the chat, by session id.
     previews: HashSet<u64>,
@@ -262,6 +269,7 @@ impl Chat {
     /// how many things in it wait on the user.
     fn tab_state(&self, tab: PanelTab, cx: &App) -> Option<usize> {
         match tab {
+            PanelTab::Work => self.has_work().then_some(0),
             PanelTab::Browser => {
                 let browser = self.browser.read(cx);
                 browser.is_open().then(|| browser.waiting())
@@ -291,6 +299,7 @@ impl Chat {
 
     fn tab_body(&self, tab: PanelTab, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         match tab {
+            PanelTab::Work => self.work_tab(cx),
             PanelTab::Browser => self.browser.clone().into_any_element(),
             PanelTab::Changes => self.changes_tab(cx),
             PanelTab::Files => self.files_tab(window, cx),
@@ -368,6 +377,23 @@ impl Chat {
 
     /// Show the panel on the session's tab, or hide it. With nothing else
     /// to show, it opens on the browser, ready for an address.
+    /// Open the panel on Work when a turn has started working and the
+    /// window docks it beside the chat; left closed in a narrow window, and
+    /// once per turn, so closing it keeps it closed.
+    pub(crate) fn open_work_if_wanted(&mut self, window: &Window) {
+        if !std::mem::take(&mut self.panel.want_work) {
+            return;
+        }
+        if self.panel.open || !docks(window.viewport_size().width) {
+            return;
+        }
+        self.page = Page::Chat;
+        self.panel.open = true;
+        self.panel
+            .tabs
+            .insert(self.session_on_screen(), PanelTab::Work);
+    }
+
     pub(crate) fn toggle_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.panel_view(cx).is_some() {
             return self.hide_panel(window, cx);
@@ -927,6 +953,7 @@ mod tests {
         assert_eq!(
             shown_tabs(own(), |_| Some(0)),
             vec![
+                (PanelTab::Work, 0),
                 (PanelTab::Browser, 0),
                 (PanelTab::Changes, 0),
                 (PanelTab::Files, 0),

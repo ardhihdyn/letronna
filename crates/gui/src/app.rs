@@ -252,6 +252,10 @@ pub(crate) struct Chat {
     pub(crate) sidebar_moved: Option<std::time::Instant>,
     /// How wide the sidebar was last drawn, which the title bar matches.
     pub(crate) sidebar_drawn: Pixels,
+    /// The step picked in the Work tab; None follows the newest.
+    pub(crate) work_pick: Option<usize>,
+    /// The Work tab has opened for the turn under way.
+    pub(crate) work_seen: bool,
     /// The sidebar, the panel and the chat's rows coming in.
     pub(crate) motion: crate::ui::motion::Moves,
     pub(crate) greeting: &'static str,
@@ -1029,6 +1033,8 @@ impl Chat {
             sidebar_open: true,
             sidebar_moved: None,
             sidebar_drawn: crate::ui::sidebar::SIDEBAR_WIDTH,
+            work_pick: None,
+            work_seen: false,
             motion: Default::default(),
             greeting,
             account,
@@ -3352,6 +3358,12 @@ impl Chat {
         self.asking = asking;
         if let agent::Next::AskUser(call) | agent::Next::Run(call) = &next {
             self.show_browser(&call.name, cx);
+            // The first call of a turn opens the work beside the chat.
+            if !self.work_seen {
+                self.panel.want_work = true;
+                self.work_pick = None;
+            }
+            self.work_seen = true;
         }
         match next {
             agent::Next::Done => self.finish(cx),
@@ -4539,6 +4551,7 @@ impl Chat {
     }
 
     fn finish(&mut self, cx: &mut Context<Self>) {
+        self.work_seen = false;
         let stopped = std::mem::take(&mut self.stopping);
         let session = self.streaming_id;
         let connection = self.turn.as_ref().map(|turn| turn.connection.clone());
@@ -5221,6 +5234,7 @@ impl Render for Chat {
             })
             .children(self.toast_layer(window, cx));
 
+        self.open_work_if_wanted(window);
         let sidebar = self.sidebar_frame(window, cx);
         v_flex()
             .size_full()

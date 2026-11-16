@@ -836,6 +836,7 @@ fn main() {
     app.run(|cx| {
         letronna_core::diag::mark("app");
         gpui_component::init(cx);
+        theme::register_fonts(cx);
         highlight::register();
         plugins::init(
             cx,

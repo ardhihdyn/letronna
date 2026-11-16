@@ -1374,16 +1374,19 @@ impl Chat {
         }
         .w_full()
         .gap_1()
-        .rounded(cx.theme().radius)
+        // The phone's composer: a raised, rounded bar floating on a soft
+        // shadow over the page.
+        .rounded(COMPOSER_RADIUS)
         .border_1()
         .border_color(cx.theme().border)
-        .bg(cx.theme().secondary.opacity(0.4))
-        .px_2()
-        .py_1()
+        .bg(cx.theme().secondary)
+        .shadow_lg()
+        .px_2p5()
+        .py_1p5()
         .relative()
         .children(
             self.ring(crate::ui::keys::Region::Composer, cx)
-                .map(|ring| ring.rounded(cx.theme().radius)),
+                .map(|ring| ring.rounded(COMPOSER_RADIUS)),
         );
         let frame = if stacked {
             frame.child(input.w_full()).child(
@@ -1619,3 +1622,7 @@ mod typed_tests {
         assert_eq!(typed(&space), None);
     }
 }
+
+/// The composer's corners: round enough to read as the phone's pill on one
+/// line, still a card when it grows to several.
+const COMPOSER_RADIUS: Pixels = px(22.);

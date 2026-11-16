@@ -85,9 +85,9 @@ impl Chat {
         h_flex()
             .id(("nav", nav.slot()))
             .track_focus(&handles[at])
-            .h(px(26.))
-            .px_2()
-            .gap_2()
+            .h(px(34.))
+            .px_2p5()
+            .gap_2p5()
             .items_center()
             .rounded(theme.radius)
             // Always there, so the ring the keys bring moves nothing.
@@ -98,6 +98,9 @@ impl Chat {
             .font_weight(FontWeight::MEDIUM)
             .text_color(theme.sidebar_foreground)
             .when(active, |this| this.bg(accent))
+            .when(!active, |this| {
+                this.hover(move |s| s.bg(accent.opacity(0.5)))
+            })
             .focus(|s| s.border_color(ring))
             .active(|s| s.bg(accent.opacity(0.6)))
             .child(icon.size_4().text_color(muted))

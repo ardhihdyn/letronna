@@ -5038,7 +5038,6 @@ impl Render for Chat {
             let text = error.clone();
             window.push_notification(
                 gpui_component::notification::Notification::error(error)
-                    .autohide(false)
                     .action(move |_, window, cx| {
                         let text = text.clone();
                         let copied = window.use_keyed_state("copied-error", cx, |_, _| false);
@@ -5070,7 +5069,11 @@ impl Render for Chat {
                                 })
                                 .detach();
                             })
-                    }),
+                    })
+                    // After the copy button, which would otherwise keep it up
+                    // until closed: it goes on its own, held while the pointer
+                    // is on it so there is time to copy it.
+                    .autohide(true),
                 cx,
             );
         }

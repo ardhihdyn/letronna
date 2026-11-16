@@ -263,14 +263,14 @@ impl Chat {
                         TextView::markdown(self.text_id("md-cut", index), cut.shown)
                             .selectable(selectable)
                             .text_size(px(15.))
-                            .font_weight(FontWeight::MEDIUM)
+                            .font_weight(FontWeight::NORMAL)
                             .line_height(leading),
                     )
                     .into_any_element(),
                 None => TextView::markdown(md, said)
                     .selectable(selectable)
                     .text_size(px(15.))
-                    .font_weight(FontWeight::MEDIUM)
+                    .font_weight(FontWeight::NORMAL)
                     .line_height(leading)
                     .into_any_element(),
             }
@@ -403,27 +403,6 @@ impl Chat {
             // Closer to its own text than the turn's rows are to each other,
             // so a label reads as the head of what follows it.
             .gap_1p5()
-            // Your prompt is a plain row under its own label, its buttons at
-            // the label's end; the line keeps their height so nothing moves
-            // when they show.
-            .when(is_user, |this| {
-                this.child(
-                    h_flex()
-                        .h_5()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_family(HEADING_FONT)
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(cx.theme().link)
-                                .child("You"),
-                        )
-                        .children(on_label),
-                )
-            })
             .when(labeled && !is_user, |this| {
                 this.child(
                     h_flex()
@@ -457,8 +436,39 @@ impl Chat {
             // column for some documents (lists after a wrapped paragraph),
             // which pushes the whole chat past the composer. Clipping here
             // clamps it; min_w_0 would instead collapse list layout.
+            // Your prompt sits in a bubble at the right, as on the phone;
+            // a reply reads across the column.
             .when(!tool_only, |this| {
-                this.child(div().w_full().overflow_hidden().pb_1().child(body))
+                if is_user && !editing {
+                    this.child(
+                        h_flex().w_full().justify_end().child(
+                            div()
+                                .max_w(relative(0.85))
+                                .overflow_hidden()
+                                .px_4()
+                                .py_2()
+                                .rounded(BUBBLE_RADIUS)
+                                .border_1()
+                                .border_color(cx.theme().border)
+                                .bg(cx.theme().secondary)
+                                .child(body),
+                        ),
+                    )
+                } else {
+                    this.child(div().w_full().overflow_hidden().pb_1().child(body))
+                }
+            })
+            // Its buttons on a line of their own under it, which keeps its
+            // height so nothing moves when they show.
+            .when(is_user, |this| {
+                this.child(
+                    h_flex()
+                        .h_5()
+                        .items_center()
+                        .justify_end()
+                        .gap_2()
+                        .children(on_label),
+                )
             })
             // A reply that said a few words and goes on to write a call: the
             // call is named under them while it streams.
@@ -1890,19 +1900,46 @@ impl Chat {
             .items_center()
             .justify_center()
             .gap_2()
+            // The phone's opening: the mark grows in, then the greeting for
+            // the time of day rises under it, and the session's line after.
             .child(
-                div()
-                    .font_family(WORDMARK_FONT)
-                    .italic()
-                    .text_size(px(72.))
-                    .line_height(px(80.))
-                    .child(BRAND),
+                Icon::new(AppIcon::Mark)
+                    .size(px(44.))
+                    .text_color(cx.theme().primary)
+                    .with_animation(
+                        "empty-mark",
+                        crate::ui::motion::enter(MARK_IN),
+                        |icon, t| {
+                            let t = crate::ui::motion::overshoot(t);
+                            icon.size(px(28. + 16. * t)).opacity(t.min(1.))
+                        },
+                    ),
             )
             .child(
                 div()
-                    .text_sm()
+                    .relative()
+                    .mt_2()
+                    .font_family(WORDMARK_FONT)
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_size(px(40.))
+                    .line_height(px(48.))
+                    .child(time_of_day(chrono::Timelike::hour(&chrono::Local::now())))
+                    .with_animation(
+                        "empty-hello",
+                        crate::ui::motion::enter(HELLO_IN),
+                        crate::ui::motion::rise,
+                    ),
+            )
+            .child(
+                div()
+                    .relative()
                     .text_color(cx.theme().muted_foreground)
-                    .child(self.greeting),
+                    .child(self.greeting)
+                    .with_animation(
+                        "empty-line",
+                        crate::ui::motion::enter(LINE_IN),
+                        crate::ui::motion::rise,
+                    ),
             )
             .when(no_project, |this| {
                 this.child(
@@ -2684,3 +2721,37 @@ mod tests {
         assert_eq!(ran_for(ms(125_000)).as_deref(), Some("2m 5s"));
     }
 }
+
+/// How long the empty chat's mark takes to grow in.
+const MARK_IN: std::time::Duration = std::time::Duration::from_millis(520);
+/// The greeting under it, a beat behind.
+const HELLO_IN: std::time::Duration = std::time::Duration::from_millis(620);
+/// The session's line, last.
+const LINE_IN: std::time::Duration = std::time::Duration::from_millis(760);
+
+/// What the empty chat says, by the hour on this computer's clock.
+fn time_of_day(hour: u32) -> &'static str {
+    match hour {
+        5..=11 => "Good morning",
+        12..=17 => "Good afternoon",
+        18..=22 => "Good evening",
+        _ => "Up late",
+    }
+}
+
+#[cfg(test)]
+mod time_of_day_tests {
+    use super::time_of_day;
+
+    #[test]
+    fn each_hour_has_a_greeting_and_the_turns_fall_where_they_should() {
+        assert_eq!(time_of_day(4), "Up late");
+        assert_eq!(time_of_day(5), "Good morning");
+        assert_eq!(time_of_day(12), "Good afternoon");
+        assert_eq!(time_of_day(18), "Good evening");
+        assert_eq!(time_of_day(23), "Up late");
+    }
+}
+
+/// The corners of your message's bubble, the phone's.
+const BUBBLE_RADIUS: Pixels = px(20.);

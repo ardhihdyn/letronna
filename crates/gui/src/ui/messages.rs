@@ -1625,6 +1625,7 @@ impl Chat {
         });
         let theme = cx.theme();
         let (muted, plain, danger) = (theme.muted_foreground, theme.foreground, theme.danger);
+        let idle = running.is_none();
         let line: Vec<AnyElement> = match running {
             Some(call) => {
                 let summary = letronna_core::tools::summary(&call.name, &call.arguments);
@@ -1691,30 +1692,53 @@ impl Chat {
             .id(self.row_id("run", run.first))
             .track_focus(&focus)
             .key_context("ToolRun")
-            .h(px(26.))
+            // The phone's work card: a raised, rounded head for what the
+            // turn did, its steps opening under it.
+            .h(px(40.))
             // As a tool row's: its nowrap text must not widen the column.
             .min_w_0()
             .w_full()
-            .px_2()
-            .gap_1p5()
+            .px_3()
+            .gap_2()
             .items_center()
-            .rounded(theme.radius)
+            .rounded(theme.radius_lg)
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.secondary)
             .cursor_pointer()
-            .text_xs()
-            .font_family(HEADING_FONT)
+            .text_sm()
             .text_color(muted)
-            .focus(|s| s.bg(theme.secondary))
-            .active(|s| s.bg(theme.secondary.opacity(0.5)))
+            .hover(|s| s.bg(theme.list_hover))
+            .focus(|s| s.border_color(theme.ring))
+            .active(|s| s.bg(theme.secondary.opacity(0.6)))
+            .when(idle, |this| {
+                this.child(
+                    div()
+                        .size(px(24.))
+                        .flex_shrink_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(theme.radius)
+                        .bg(theme.primary.opacity(0.12))
+                        .child(
+                            Icon::new(AppIcon::Terminal)
+                                .size_3p5()
+                                .text_color(theme.link),
+                        ),
+                )
+            })
+            .children(line)
+            .child(div().flex_1())
+            .children(ended)
             .child(
                 Icon::new(if open {
                     IconName::ChevronDown
                 } else {
                     IconName::ChevronRight
                 })
-                .size_3(),
+                .size_4(),
             )
-            .children(line)
-            .children(ended)
             // As on a tool row, a press leaves the keys in the composer;
             // Tab is what picks the line out.
             .on_any_mouse_down(|_, window, _| window.prevent_default())

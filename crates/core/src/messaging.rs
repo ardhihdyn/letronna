@@ -1764,7 +1764,8 @@ pub(crate) mod tests {
         // Kept with the rest of the settings, and off in settings from before it.
         let kept: Config = serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
         assert!(kept.discord.cloud);
-        let before: super::Discord = serde_json::from_str(r#"{"enabled": true, "bot_token": "t", "owner": "1"}"#).unwrap();
+        let before: super::Discord =
+            serde_json::from_str(r#"{"enabled": true, "bot_token": "t", "owner": "1"}"#).unwrap();
         assert!(before.hears());
     }
 

@@ -74,13 +74,39 @@ impl Chat {
                     .items_center()
                     .justify_center()
                     .py_10()
+                    // A soft blue glow behind the card, the window's one
+                    // colour moment while nothing else is on it.
+                    .child(
+                        div()
+                            .absolute()
+                            .top(relative(0.5))
+                            .left(relative(0.5))
+                            .size(px(10.))
+                            .rounded_full()
+                            .shadow(vec![gpui::BoxShadow {
+                                color: cx.theme().primary.opacity(0.22),
+                                offset: gpui::point(px(-5.), px(-5.)),
+                                blur_radius: px(260.),
+                                spread_radius: px(150.),
+                                inset: false,
+                            }]),
+                    )
+                    // The steps on a raised card with the phone's corners.
                     .child(
                         v_flex()
-                            .w(px(460.))
+                            .relative()
+                            .w(px(520.))
                             .max_w_full()
-                            .px_6()
+                            .mx_6()
+                            .px_10()
+                            .py_10()
                             .gap_8()
-                            .child(progress(now, cx))
+                            .rounded(px(24.))
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .bg(cx.theme().secondary)
+                            .shadow_2xl()
+                            .when(now > 0, |this| this.child(progress(now, cx)))
                             .child(arrive(page, now, cx)),
                     ),
             )
@@ -93,22 +119,71 @@ impl Chat {
         next: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let theme = cx.theme();
+        let (muted, link) = (theme.muted_foreground, theme.link);
+        let point = |icon: AppIcon, text: &'static str| {
+            h_flex()
+                .gap_3()
+                .items_center()
+                .child(
+                    div()
+                        .size(px(30.))
+                        .flex_shrink_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(9.))
+                        .bg(theme.primary.opacity(0.12))
+                        .child(Icon::new(icon).size_4().text_color(link)),
+                )
+                .child(div().text_sm().child(text))
+        };
         v_flex()
+            .items_center()
             .gap_6()
-            .child(img("images/letronna.png").size(px(64.)).rounded(px(14.)))
-            .child(heading(
-                "Welcome to Letronna",
-                "An agent that works on your computer: it reads, writes, runs and \
-                 browses for you. Connect a model and it is ready.",
-                cx,
-            ))
             .child(
-                h_flex().child(
-                    Button::new("setup-start")
-                        .primary()
-                        .label("Get started")
-                        .on_click(next),
-                ),
+                Icon::new(AppIcon::Mark)
+                    .size(px(52.))
+                    .text_color(theme.primary),
+            )
+            .child(
+                v_flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .font_family(WORDMARK_FONT)
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_size(px(38.))
+                            .line_height(px(46.))
+                            .text_center()
+                            .child("Welcome to Letronna"),
+                    )
+                    .child(
+                        div()
+                            .text_center()
+                            .text_color(muted)
+                            .line_height(relative(1.5))
+                            .child("An agent that works on your computer. Connect a model and it is ready."),
+                    ),
+            )
+            .child(
+                v_flex()
+                    .w_full()
+                    .gap_3()
+                    .py_2()
+                    .child(point(AppIcon::Pencil, "Reads and edits the files in your projects"))
+                    .child(point(AppIcon::Terminal, "Runs commands and tests, with your yes"))
+                    .child(point(AppIcon::Search, "Searches and browses the web for you")),
+            )
+            .child(
+                Button::new("setup-start")
+                    .primary()
+                    .large()
+                    .w_full()
+                    .rounded_full()
+                    .label("Get started")
+                    .on_click(next),
             )
     }
 
@@ -607,13 +682,22 @@ fn arrive(page: AnyElement, step: usize, cx: &App) -> AnyElement {
 
 /// A thin bar per step, the ones done and the one open filled in.
 fn progress(now: usize, cx: &App) -> Div {
-    h_flex().gap_1p5().children((0..STEPS).map(|i| {
-        div().h(px(3.)).flex_1().rounded_full().bg(if i <= now {
-            cx.theme().primary
-        } else {
-            cx.theme().border
-        })
-    }))
+    v_flex()
+        .gap_2()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(cx.theme().muted_foreground)
+                .child(format!("STEP {} OF {STEPS}", now + 1)),
+        )
+        .child(h_flex().gap_1p5().children((0..STEPS).map(|i| {
+            div().h(px(4.)).flex_1().rounded_full().bg(if i <= now {
+                cx.theme().primary
+            } else {
+                cx.theme().border
+            })
+        })))
 }
 
 /// A step's title and what it is for.
@@ -622,9 +706,10 @@ fn heading(title: &'static str, blurb: &'static str, cx: &App) -> Div {
         .gap_2()
         .child(
             div()
-                .font_family(HEADING_FONT)
+                .font_family(WORDMARK_FONT)
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_size(px(24.))
+                .text_size(px(30.))
+                .line_height(px(38.))
                 .child(title),
         )
         .child(
@@ -645,13 +730,18 @@ fn footer(
     cx: &App,
 ) -> Div {
     // Skipping is quieter than going on with something set up.
-    let on = Button::new((id, 1usize)).label(label).on_click(next);
+    let on = Button::new((id, 1usize))
+        .rounded_full()
+        .label(label)
+        .on_click(next);
     h_flex()
         .justify_between()
         .items_center()
         .child(
             Button::new((id, 0usize))
                 .plain(cx)
+                .rounded_full()
+                .icon(Icon::new(IconName::ArrowLeft))
                 .label("Back")
                 .on_click(back),
         )
@@ -664,9 +754,10 @@ fn row_card(cx: &App) -> Div {
     div()
         .px_4()
         .py_3()
-        .rounded(cx.theme().radius)
+        .rounded(cx.theme().radius_lg)
         .border_1()
         .border_color(cx.theme().border)
+        .bg(cx.theme().background)
 }
 
 /// What a model costs, per the site's model pages: "$3.00 in · $15.00 out /M".

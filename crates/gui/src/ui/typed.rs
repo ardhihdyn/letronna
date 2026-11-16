@@ -73,6 +73,7 @@ fn does(name: &str) -> Option<Does> {
         "workflows" => Does::Page(Page::Workflows),
         "agents" => Does::Page(Page::Activity),
         "wallet" => Does::Page(Page::Wallet),
+        "tasks" => Does::Page(Page::Tasks),
         _ => return None,
     })
 }

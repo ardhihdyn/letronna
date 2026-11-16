@@ -12,7 +12,8 @@ const FOLD: std::time::Duration = std::time::Duration::from_millis(240);
 
 /// The sidebar's pages after New session, in the order it lists them, every
 /// one a row of its own; Workflows only while there is a run to show.
-const PAGES: [Page; 8] = [
+const PAGES: [Page; 9] = [
+    Page::Tasks,
     Page::Capabilities,
     Page::Activity,
     Page::Plugins,
@@ -52,6 +53,7 @@ fn page_icon(page: Page) -> AppIcon {
         Page::Activity => AppIcon::Robot,
         Page::Workflows => AppIcon::Workflow,
         Page::Wallet => AppIcon::Wallet,
+        Page::Tasks => AppIcon::Checklist,
     }
 }
 
@@ -319,7 +321,7 @@ impl Chat {
             Page::Artifacts => self.read_artifacts(cx),
             Page::Wallet => self.read_wallet(true, cx),
             Page::Plugins => self.reload_plugins(),
-            Page::Chat | Page::Messaging => {}
+            Page::Chat | Page::Messaging | Page::Tasks => {}
         }
         self.page = page;
         self.focus_composer(window, cx);

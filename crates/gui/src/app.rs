@@ -125,6 +125,7 @@ pub(crate) enum Page {
     Activity,
     Workflows,
     Wallet,
+    Tasks,
 }
 impl Page {
     pub(crate) fn title(self) -> &'static str {
@@ -138,6 +139,7 @@ impl Page {
             Page::Activity => "Activity",
             Page::Workflows => "Workflows",
             Page::Wallet => "Wallet",
+            Page::Tasks => "Tasks",
         }
     }
     pub(crate) fn blurb(self) -> &'static str {
@@ -157,6 +159,7 @@ impl Page {
             Page::Workflows => "Runs of helpers Letronna started.",
             // Wallet renders its own page too.
             Page::Wallet => "The wallets Letronna pays from.",
+            Page::Tasks => "Each session's checklist, by project.",
         }
     }
 }
@@ -5111,6 +5114,8 @@ impl Render for Chat {
             self.workflows_page(window, cx).into_any_element()
         } else if self.page == Page::Artifacts {
             self.artifacts_page(cx).into_any_element()
+        } else if self.page == Page::Tasks {
+            self.tasks_page(cx).into_any_element()
         } else if self.page == Page::Wallet {
             self.wallet_page(cx).into_any_element()
         } else if self.page == Page::Capabilities {

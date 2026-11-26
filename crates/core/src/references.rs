@@ -400,12 +400,17 @@ pub fn reference(path: &Path, workspace: Option<&Path>) -> String {
     format!("@{}", named.replace(' ', "\\ "))
 }
 
-/// Build a bounded project file index using the same ignore rules as search.
+/// How many entries of a project are walked for the `@` picker: enough for
+/// a large repository, few enough that a home folder is read in a moment.
+const INDEXED: usize = 30_000;
+
+/// The files in `folder`, by their path in it with `/` between the parts,
+/// skipping what search skips, `INDEXED` entries at the most.
 pub fn project_files(folder: &Path) -> Vec<String> {
     ignore::WalkBuilder::new(folder)
         .require_git(false)
         .build()
-        .take(30_000)
+        .take(INDEXED)
         .filter_map(Result::ok)
         .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_file()))
         .filter_map(|entry| {
@@ -447,6 +452,7 @@ pub fn rank_files(files: &[String], query: &str, limit: usize) -> Vec<String> {
         .collect()
 }
 
+/// `raw` split after its last separator, into the folder and what is typed of a name in it.
 fn split_partial(raw: &str) -> (&str, &str) {
     match raw.rfind(['/', '\\']) {
         Some(at) => (&raw[..=at], &raw[at + 1..]),

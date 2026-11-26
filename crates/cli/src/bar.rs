@@ -1031,8 +1031,11 @@ pub struct Bar {
     added: Added,
     /// The open session's project folder, where an `@` path is completed.
     folder: Option<std::path::PathBuf>,
+    /// The project's files the `@` picker looks among, read once per folder.
     file_index: std::cell::OnceCell<Vec<String>>,
+    /// The last reference the picker was asked about, and what matched it.
     file_matches: std::cell::RefCell<Option<(String, Vec<String>)>>,
+    /// The reference escape closed the picker on, kept closed until it changes.
     files_dismissed: Option<String>,
     /// Whether what is sent at the prompt goes into the folder's history:
     /// only once the terminal at the prompt says so, so a box made for
@@ -2521,6 +2524,8 @@ impl Bar {
         self.done
     }
 
+    /// The project's files the `@` reference before the cursor matches, best
+    /// first, or none while anything else has the keys.
     fn file_options(&self) -> Vec<String> {
         if self.secret
             || self.working
@@ -2539,10 +2544,10 @@ impl Bar {
             return Vec::new();
         }
         let mut cached = self.file_matches.borrow_mut();
-        if let Some((previous, matches)) = cached.as_ref() {
-            if previous == &query {
-                return matches.clone();
-            }
+        if let Some((previous, matches)) = cached.as_ref()
+            && previous == &query
+        {
+            return matches.clone();
         }
         let index = self
             .file_index

@@ -400,6 +400,53 @@ pub fn reference(path: &Path, workspace: Option<&Path>) -> String {
     format!("@{}", named.replace(' ', "\\ "))
 }
 
+/// Build a bounded project file index using the same ignore rules as search.
+pub fn project_files(folder: &Path) -> Vec<String> {
+    ignore::WalkBuilder::new(folder)
+        .require_git(false)
+        .build()
+        .take(30_000)
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_file()))
+        .filter_map(|entry| {
+            let path = entry.path().strip_prefix(folder).ok()?;
+            let parts: Vec<_> = path.iter().map(|part| part.to_string_lossy()).collect();
+            let name = parts.join("/");
+            (!name.chars().any(char::is_control)).then_some(name)
+        })
+        .collect()
+}
+
+/// Rank filename matches ahead of matches elsewhere in the path.
+pub fn rank_files(files: &[String], query: &str, limit: usize) -> Vec<String> {
+    let query = query.replace("\\ ", " ").replace('\\', "/").to_lowercase();
+    let mut matches: Vec<_> = files
+        .iter()
+        .filter_map(|path| {
+            let lower = path.to_lowercase();
+            let name = lower.rsplit('/').next().unwrap_or(&lower);
+            let rank = if name == query {
+                0
+            } else if name.starts_with(&query) {
+                1
+            } else if name.contains(&query) {
+                2
+            } else if lower.contains(&query) {
+                3
+            } else {
+                return None;
+            };
+            Some((rank, path.len(), path))
+        })
+        .collect();
+    matches.sort_unstable();
+    matches
+        .into_iter()
+        .take(limit)
+        .map(|(_, _, path)| path.clone())
+        .collect()
+}
+
 fn split_partial(raw: &str) -> (&str, &str) {
     match raw.rfind(['/', '\\']) {
         Some(at) => (&raw[..=at], &raw[at + 1..]),

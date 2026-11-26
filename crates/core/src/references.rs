@@ -400,24 +400,27 @@ pub fn reference(path: &Path, workspace: Option<&Path>) -> String {
     format!("@{}", named.replace(' ', "\\ "))
 }
 
-/// What `partial`, typed after an `@`, completes to, and the names it could
-/// go on as when there is more than one, for the input to offer.
-pub fn complete(partial: &str, workspace: Option<&Path>) -> (String, Vec<String>) {
+fn split_partial(raw: &str) -> (&str, &str) {
+    match raw.rfind(['/', '\\']) {
+        Some(at) => (&raw[..=at], &raw[at + 1..]),
+        None => ("", raw),
+    }
+}
+
+/// Matching names for a draft reference, including a single match.
+pub fn suggestions(partial: &str, workspace: Option<&Path>) -> Vec<String> {
     let ctx = ToolContext {
         workspace: workspace.map(Path::to_path_buf),
         ..ToolContext::default()
     };
     let raw = partial.replace("\\ ", " ");
-    let (folder, start) = match raw.rfind(['/', '\\']) {
-        Some(at) => (&raw[..=at], &raw[at + 1..]),
-        None => ("", raw.as_str()),
-    };
+    let (folder, start) = split_partial(&raw);
     // Through `resolve`, so no names come from a folder that may not be read.
     let Ok(dir) = tools::resolve(if folder.is_empty() { "." } else { folder }, &ctx) else {
-        return (partial.to_owned(), Vec::new());
+        return Vec::new();
     };
     let Ok(entries) = std::fs::read_dir(&dir) else {
-        return (partial.to_owned(), Vec::new());
+        return Vec::new();
     };
     let mut names: Vec<String> = entries
         .filter_map(Result::ok)
@@ -430,6 +433,15 @@ pub fn complete(partial: &str, workspace: Option<&Path>) -> (String, Vec<String>
         })
         .collect();
     names.sort();
+    names
+}
+
+/// What `partial`, typed after an `@`, completes to, and the names it could
+/// go on as when there is more than one, for the input to offer.
+pub fn complete(partial: &str, workspace: Option<&Path>) -> (String, Vec<String>) {
+    let raw = partial.replace("\\ ", " ");
+    let (folder, _) = split_partial(&raw);
+    let names = suggestions(partial, workspace);
     let Some(first) = names.first() else {
         return (partial.to_owned(), Vec::new());
     };
@@ -462,6 +474,14 @@ mod tests {
         std::fs::write(dir.join(".env"), "TOKEN=sk-secret-value\n").unwrap();
         std::fs::write(dir.join("notes with space.md"), "spaced\n").unwrap();
         dir
+    }
+
+    #[test]
+    fn live_suggestions_include_a_single_match() {
+        let dir = project("live-suggestions");
+        assert_eq!(suggestions("src/ma", Some(&dir)), ["main.rs"]);
+        assert!(suggestions("src/missing", Some(&dir)).is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

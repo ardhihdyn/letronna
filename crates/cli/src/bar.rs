@@ -3339,6 +3339,16 @@ impl Bar {
             // What the command being given its words does, while they are
             // typed, where the menu has gone.
             blurb.to_owned()
+        } else if let Some(files) = (!self.secret && !self.working && self.asking.is_none())
+            .then(|| self.line.reference_before())
+            .flatten()
+            .map(|partial| letronna_core::references::suggestions(&partial, self.folder.as_deref()))
+            .filter(|files| !files.is_empty())
+        {
+            offered(
+                &files,
+                render::width().saturating_sub(self.mode_width(width)),
+            )
         } else if self.working && self.sendable() > 0 {
             "ctrl-s to send now  ·  ↑ to take it back  ·  esc to stop".to_owned()
         } else if self.working {

@@ -94,6 +94,8 @@ impl Chat {
         letronna_core::gateway::free_today(gateway, model, self.account.as_ref())
     }
 
+    /// Whether a picture of `kind` made with `model` in the active chat goes
+    /// to a ChatGPT plan, which needs no credit, rather than a hosted model.
     fn image_uses_chatgpt(&self, kind: &str, model: Option<&str>) -> bool {
         if kind != "image" {
             return false;

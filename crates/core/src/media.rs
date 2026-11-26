@@ -446,6 +446,8 @@ pub fn image_uses_chatgpt(endpoint: &str, model: Option<&str>) -> bool {
     image_plan(Some(&connection), model).is_some()
 }
 
+/// The plan `plan_for` picks, with `model` the image model picked in the
+/// model menu, `None` for Auto.
 fn image_plan(connection: Option<&Connection>, model: Option<&str>) -> Option<images::Plan> {
     if !crate::auth::signed_in() || (model.is_none() && connection.is_some_and(images::chats_on)) {
         return images::plan(connection);
